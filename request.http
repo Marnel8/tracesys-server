@@ -1,0 +1,82 @@
+@BaseURl = http://localhost:5000/api/v1
+
+POST {{BaseURl}}/user/register
+content-type: application/json
+
+{
+    "firstName": "John",
+    "lastName": "Doe",
+    "email": "mharnhelvalentin@gmail.com",
+    "type": "researcher",
+    "password": "12345678",
+    "gender": "male",
+    "contactNumber": "09123456789"
+}
+
+###
+POST {{BaseURl}}/user/activate-user
+content-type: application/json
+
+{
+    "activation_token": "",
+    "activation_code": "9932"
+}
+
+###
+POST {{BaseURl}}/user/
+Content-Type: application/json
+
+{
+    "email": "mharnhelvalentin@gmail.com",
+    "password": "12345678"
+}
+
+###
+GET {{BaseURl}}/user/me
+
+###
+GET {{BaseURl}}/user/refresh-token
+
+###
+GET {{BaseURl}}/user/logout
+
+### COMMUNITY
+GET {{BaseURl}}/project
+
+### GET PROJECT BY ID
+GET {{BaseURl}}/project/1asdasdasd
+
+### GET PROJECT BY USER
+GET {{BaseURl}}/project/get-user-projects
+
+### DELETE PROJECT
+DELETE {{BaseURl}}/project/1asdasdasd
+
+### LIKE A PROJECT
+PUT {{BaseURl}}/project/react/1asdasdasd
+
+### SUBSCRIBERS
+
+POST {{BaseURl}}/subscriber/
+Content-Type: application/json
+
+{
+    "email": "tiomarone02@gmail.com"
+}
+
+
+### REQUEST FOR QOUATATION
+
+POST {{BaseURl}}/request-for-quotation/
+Content-Type: application/json
+
+{
+  "firstName": "John",
+  "lastName": "Doe",
+  "email": "mharnhelvalentin@gmail.com",
+  "kitName": "First Aid Kit",
+  "contactNumber": "+1234567890",
+  "organization": "Health Corp",
+  "additionalRequirements": "Need expedited shipping",
+  "quantity": 5
+}

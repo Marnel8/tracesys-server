@@ -1,0 +1,23 @@
+{
+	"compilerOptions": {
+		"module": "CommonJS", // Ensure compatibility with Node.js
+		"target": "ES2020", // Use modern JavaScript
+		"outDir": "./dist", // Output directory
+		"rootDir": "./src", // Root directory for source files
+		"strict": true,
+		"esModuleInterop": true, // Allows compatibility between CommonJS and ES Modules
+		"skipLibCheck": true, // Skip type checking for third-party modules
+		"resolveJsonModule": true, // Enable importing JSON files
+		"emitDecoratorMetadata": true, // Required for Sequelize
+		"experimentalDecorators": true, // Enable decorators for Sequelize
+		"moduleResolution": "node", // Ensure Node-style module resolution for relative imports
+		"forceConsistentCasingInFileNames": true, // Ensure consistent casing in imports
+		"baseUrl": ".", // Base directory for module resolution
+		"paths": {
+			"@/*": ["./src/*"], // Alias for imports
+			"@models/*": ["./src/db/models/*"]
+		}
+	},
+	"include": ["src/**/*.ts"], // Include all TypeScript files in the src directory
+	"exclude": ["node_modules", "dist"] // Exclude these directories
+}
