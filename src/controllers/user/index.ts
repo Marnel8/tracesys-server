@@ -6,7 +6,7 @@ import jwt, { JwtPayload } from "jsonwebtoken";
 import sendMail from "@/utils/send-mail";
 import { createActivationToken } from "@/services/user";
 import User from "@/db/models/user";
-import { IActivationRequest } from "@/@types/user";
+import { IActivationRequest, CreateUserParams } from "@/@types/user";
 import { StatusCodes } from "http-status-codes";
 import {
 	BadRequestError,
@@ -14,12 +14,15 @@ import {
 	NotFoundError,
 	UnauthorizedError,
 } from "@/utils/error";
-import { createUserData, findUserByID, login } from "@/data/user";
+import { createUserData, findUserByID, login, updateUserData, changePasswordData } from "@/data/user";
 import {
 	accessTokenOptions,
 	refreshTokenOptions,
 	sendToken,
 } from "@/utils/jwt";
+import { uploadUserAvatarUpdate, uploadUserAvatar } from "@/utils/image-handler";
+// Simple in-memory reset store (email -> { code, expiresAt })
+const passwordResetStore: Map<string, { code: string; expiresAt: number }> = new Map();
 
 export const registerUserController = async (req: Request, res: Response) => {
 	const {
@@ -42,7 +45,8 @@ export const registerUserController = async (req: Request, res: Response) => {
 		throw new BadRequestError("Please provide all necessary data.");
 	}
 
-	const avatar = req.file?.filename;
+	// Handle avatar upload if provided - use Cloudinary URL if available
+	const avatar = req.cloudUrls && req.cloudUrls.length > 0 ? req.cloudUrls[0] : "";
 
 	const user = {
 		firstName,
@@ -151,6 +155,88 @@ export const loginController = async (req: Request, res: Response) => {
 	sendToken(userResult, StatusCodes.OK, res);
 };
 
+export const forgotPasswordController = async (req: Request, res: Response) => {
+	const { email } = req.body as { email?: string };
+
+	if (!email) {
+		throw new BadRequestError("Email is required");
+	}
+
+	const user = await User.findOne({ where: { email } });
+
+	// Do not reveal whether user exists
+	if (!user) {
+		res.status(StatusCodes.OK).json({ success: true, message: "If the email exists, a code has been sent" });
+		return;
+	}
+
+	const code = Math.floor(1000 + Math.random() * 9000).toString();
+	const expiresAt = Date.now() + 15 * 60 * 1000;
+	passwordResetStore.set(email, { code, expiresAt });
+
+	const projectRoot = process.cwd();
+	const candidateAssetDirs = [
+		path.join(projectRoot, "assets"),
+		path.join(projectRoot, "src", "assets"),
+		path.join(projectRoot, "dist", "assets"),
+	];
+	const assetsDir = candidateAssetDirs.find((p) => fs.existsSync(p)) || candidateAssetDirs[0];
+
+	await sendMail({
+		email,
+		subject: "Reset your password",
+		template: "activation-mail.ejs",
+		data: { user, activationCode: code },
+		attachments: [
+			{
+				filename: "logo.png",
+				path: path.join(assetsDir, "logo.png"),
+				cid: "logo",
+			},
+		],
+	});
+
+	res.status(StatusCodes.OK).json({ success: true, message: "Verification code sent" });
+};
+
+export const resetPasswordController = async (req: Request, res: Response) => {
+	const { email, activation_code, password } = req.body as {
+		email?: string;
+		activation_code?: string;
+		password?: string;
+	};
+
+	if (!email || !activation_code || !password) {
+		throw new BadRequestError("Email, code and new password are required");
+	}
+
+	const entry = passwordResetStore.get(email);
+	if (!entry) {
+		throw new BadRequestError("Invalid or expired code");
+	}
+
+	if (Date.now() > entry.expiresAt) {
+		passwordResetStore.delete(email);
+		throw new BadRequestError("Code expired");
+	}
+
+	if (entry.code !== activation_code) {
+		throw new BadRequestError("Invalid code");
+	}
+
+	const user = await User.findOne({ where: { email } });
+	if (!user) {
+		throw new NotFoundError("User not found");
+	}
+
+	user.password = password;
+	await user.save();
+
+	passwordResetStore.delete(email);
+
+	res.status(StatusCodes.OK).json({ success: true, message: "Password has been reset" });
+};
+
 export const getUserDetailsController = async (req: Request, res: Response) => {
 	const { access_token } = req.cookies;
 
@@ -234,4 +320,85 @@ export const logoutController = async (req: Request, res: Response) => {
 	} catch (error) {
 		throw new ConflictError("Something went wrong.");
 	}
+};
+
+export const editUserController = async (req: Request, res: Response) => {
+	const { id } = req.params;
+	const {
+		firstName,
+		lastName,
+		middleName,
+		email,
+		contactNumber,
+		age,
+		gender,
+		address,
+		bio,
+		studentId,
+		instructorId,
+		role,
+		password,
+	} = req.body;
+
+	if (!id) {
+		throw new BadRequestError("User ID is required.");
+	}
+
+	// Handle avatar upload if provided - use Cloudinary URL if available
+	const avatar = req.cloudUrls && req.cloudUrls.length > 0 ? req.cloudUrls[0] : undefined;
+
+	const updateData: Partial<CreateUserParams> = {
+		...(firstName && { firstName }),
+		...(lastName && { lastName }),
+		...(middleName !== undefined && { middleName }),
+		...(email && { email }),
+		...(contactNumber && { contactNumber }),
+		...(age !== undefined && { age }),
+		...(gender && { gender }),
+		...(address !== undefined && { address }),
+		...(bio !== undefined && { bio }),
+		...(studentId !== undefined && { studentId }),
+		...(instructorId !== undefined && { instructorId }),
+		...(role && { role }),
+		...(password && { password }),
+		...(avatar && { avatar }),
+	};
+
+	const updatedUser = await updateUserData(id, updateData);
+
+	res.status(StatusCodes.OK).json({
+		success: true,
+		message: "User updated successfully",
+		user: updatedUser,
+	});
+};
+
+export const changePasswordController = async (req: Request, res: Response) => {
+	const { currentPassword, newPassword } = req.body as {
+		currentPassword?: string;
+		newPassword?: string;
+	};
+
+	if (!currentPassword || !newPassword) {
+		throw new BadRequestError("Current password and new password are required");
+	}
+
+	if (newPassword.length < 6) {
+		throw new BadRequestError("New password must be at least 6 characters long");
+	}
+
+	// Get user ID from authenticated user (set by auth middleware)
+	console.log("req.user:", req.user);
+	console.log("req.user?.id:", req.user?.id);
+	const userId = req.user?.id;
+	if (!userId) {
+		throw new UnauthorizedError("User not authenticated");
+	}
+
+	await changePasswordData(userId, currentPassword, newPassword);
+
+	res.status(StatusCodes.OK).json({
+		success: true,
+		message: "Password changed successfully",
+	});
 };

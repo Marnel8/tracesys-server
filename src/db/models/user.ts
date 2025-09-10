@@ -187,8 +187,13 @@ export default class User extends Model {
 
 	@BeforeUpdate
 	static async hashPasswordOnUpdate(instance: User) {
-		if (instance.password) {
-			instance.password = await bcrypt.hash(instance.password, 10);
+		// Only hash password if it's a new plain text password (not already hashed)
+		// Check if password is different from the original and looks like plain text
+		if (instance.password && instance.password !== "" && instance.changed('password')) {
+			// Additional check: if password doesn't start with $2a$ or $2b$ (bcrypt hash prefix), it's plain text
+			if (!instance.password.startsWith('$2a$') && !instance.password.startsWith('$2b$')) {
+				instance.password = await bcrypt.hash(instance.password, 10);
+			}
 		}
 	}
 

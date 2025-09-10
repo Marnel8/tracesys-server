@@ -70,7 +70,7 @@ sequelize
 	});
 
 sequelize
-	.sync({ alter: true })
+	.sync({ alter: false })
 	.then(() => {
 		console.log(colors.green("Database synchronized successfully."));
 	})
