@@ -8,6 +8,7 @@ import Course from "./models/course";
 import Section from "./models/section";
 import StudentEnrollment from "./models/student-enrollment";
 import Agency from "./models/agency";
+import AgencyRequirement from "./models/agency-requirement";
 import Supervisor from "./models/supervisor";
 import Practicum from "./models/practicum";
 import AttendanceRecord from "./models/attendance-record";
@@ -38,6 +39,7 @@ const sequelize = new Sequelize({
 		Section,
 		StudentEnrollment,
 		Agency,
+		AgencyRequirement,
 		Supervisor,
 		Practicum,
 		AttendanceRecord,
@@ -69,13 +71,14 @@ sequelize
 		console.error(colors.red("Unable to connect to the database:"), error);
 	});
 
-sequelize
-	.sync({ alter: false })
-	.then(() => {
-		console.log(colors.green("Database synchronized successfully."));
-	})
-	.catch((error) => {
-		console.error(colors.red("Error synchronizing the database:"), error);
-	});
+
+// sequelize
+// 	.sync({ alter: true, force: false })
+// 	.then(() => {
+// 		console.log(colors.green("Database synchronized successfully."));
+// 	})
+// 	.catch((error) => {
+// 		console.error(colors.red("Error synchronizing the database:"), error);
+// 	});
 
 export default sequelize;

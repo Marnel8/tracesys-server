@@ -12,6 +12,7 @@ import {
 import User from "./user";
 import RequirementTemplate from "./requirement-template";
 import RequirementComment from "./requirement-comment";
+import Practicum from "./practicum";
 
 @Table({
 	tableName: "requirements",
@@ -33,6 +34,10 @@ export default class Requirement extends Model {
 	@ForeignKey(() => RequirementTemplate)
 	@Column({ type: DataType.UUID, allowNull: true })
 	declare templateId: string;
+
+	@ForeignKey(() => Practicum)
+	@Column({ type: DataType.UUID, allowNull: true })
+	declare practicumId: string;
 
 	@Column({ type: DataType.STRING, allowNull: false })
 	declare title: string;
@@ -96,6 +101,9 @@ export default class Requirement extends Model {
 
 	@BelongsTo(() => RequirementTemplate, "templateId")
 	declare template: RequirementTemplate;
+
+	@BelongsTo(() => Practicum, "practicumId")
+	declare practicum: Practicum;
 
 	@BelongsTo(() => User, "approvedBy")
 	declare approver: User;

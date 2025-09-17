@@ -11,6 +11,7 @@ import {
 } from "sequelize-typescript";
 import Department from "./department";
 import Section from "./section";
+import Practicum from "./practicum";
 
 @Table({
 	tableName: "courses",
@@ -41,6 +42,21 @@ export default class Course extends Model {
 	@Column({ type: DataType.UUID, allowNull: false })
 	declare departmentId: string;
 
+	@Column({ type: DataType.BOOLEAN, defaultValue: true })
+	declare isActive: boolean;
+
+	@Column({ type: DataType.STRING, allowNull: true })
+	declare prerequisites: string;
+
+	@Column({ type: DataType.STRING, allowNull: true })
+	declare objectives: string;
+
+	@Column({ type: DataType.INTEGER, allowNull: true })
+	declare totalHours: number;
+
+	@Column({ type: DataType.STRING, allowNull: true })
+	declare level: string;
+
 	@CreatedAt
 	declare createdAt: Date;
 
@@ -52,6 +68,9 @@ export default class Course extends Model {
 
 	@HasMany(() => Section, "courseId")
 	declare sections: Section[];
+
+	@HasMany(() => Practicum, "courseId")
+	declare practicums: Practicum[];
 }
 
 

@@ -10,6 +10,9 @@ import {
 	BeforeCreate,
 	HasMany,
 	BeforeUpdate,
+	ForeignKey,
+	BelongsTo,
+    Unique,
 } from "sequelize-typescript";
 import dotenv from "dotenv";
 import Department from "./department";
@@ -61,19 +64,19 @@ export default class User extends Model {
 	@Column({ type: DataType.STRING, allowNull: true })
 	declare middleName: string;
 
+	@Unique("users_email_unique")
 	@Column({
 		type: DataType.STRING,
 		allowNull: false,
-		unique: true,
 		validate: { isEmail: true },
 	})
 	declare email: string;
 
-	@Column({ type: DataType.INTEGER, allowNull: true })
+	@Column({ type: DataType.INTEGER, allowNull: false })
 	declare age: number;
 
 	@Column({ type: DataType.STRING, allowNull: false })
-	declare contactNumber: string;
+	declare phone: string;
 
 	@Column({ type: DataType.STRING, allowNull: false })
 	declare password: string;
@@ -81,7 +84,7 @@ export default class User extends Model {
 	@Column({
 		type: DataType.ENUM("admin", "instructor", "student", "user", "mechanic"),
 		allowNull: false,
-		defaultValue: UserRole.USER,
+		defaultValue: UserRole.STUDENT,
 	})
 	declare role: UserRole;
 
@@ -100,19 +103,38 @@ export default class User extends Model {
 	@Column({ type: DataType.TEXT, allowNull: true })
 	declare bio: string;
 
+	@Unique("users_student_id_unique")
 	@Column({
 		type: DataType.STRING,
 		allowNull: true,
-		unique: true,
 	})
 	declare studentId: string;
 
+	@Unique("users_instructor_id_unique")
 	@Column({
 		type: DataType.STRING,
 		allowNull: true,
-		unique: true,
 	})
 	declare instructorId: string;
+
+	@ForeignKey(() => Department)
+	@Column({ type: DataType.UUID, allowNull: true })
+	declare departmentId: string;
+
+	@Column({ type: DataType.STRING, allowNull: true })
+	declare yearLevel: string;
+
+	@Column({ type: DataType.STRING, allowNull: true })
+	declare program: string;
+
+	@Column({ type: DataType.STRING, allowNull: true })
+	declare specialization: string;
+
+	@Column({ type: DataType.DATE, allowNull: true })
+	declare enrollmentDate: Date;
+
+	@Column({ type: DataType.DATE, allowNull: true })
+	declare graduationDate: Date;
 
 	@Column({
 		type: DataType.BOOLEAN,
@@ -136,6 +158,9 @@ export default class User extends Model {
 	declare updatedAt: Date;
 
 	// Associations
+	@BelongsTo(() => Department, "departmentId")
+	declare department: Department;
+
 	@HasMany(() => Department, "headId")
 	declare departmentsHeaded: Department[];
 
@@ -187,10 +212,7 @@ export default class User extends Model {
 
 	@BeforeUpdate
 	static async hashPasswordOnUpdate(instance: User) {
-		// Only hash password if it's a new plain text password (not already hashed)
-		// Check if password is different from the original and looks like plain text
 		if (instance.password && instance.password !== "" && instance.changed('password')) {
-			// Additional check: if password doesn't start with $2a$ or $2b$ (bcrypt hash prefix), it's plain text
 			if (!instance.password.startsWith('$2a$') && !instance.password.startsWith('$2b$')) {
 				instance.password = await bcrypt.hash(instance.password, 10);
 			}

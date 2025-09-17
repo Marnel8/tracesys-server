@@ -68,11 +68,11 @@ export class User extends Model {
 	})
 	declare email: string;
 
-	@Column({ type: DataType.INTEGER, allowNull: true })
+	@Column({ type: DataType.INTEGER, allowNull: false })
 	declare age: number;
 
 	@Column({ type: DataType.STRING, allowNull: false })
-	declare contactNumber: string;
+	declare phone: string;
 
 	@Column({ type: DataType.STRING, allowNull: false })
 	declare password: string;
@@ -80,7 +80,7 @@ export class User extends Model {
 	@Column({
 		type: DataType.ENUM("admin", "instructor", "student", "user", "mechanic"),
 		allowNull: false,
-		defaultValue: UserRole.USER,
+		defaultValue: UserRole.STUDENT,
 	})
 	declare role: UserRole;
 
@@ -113,6 +113,25 @@ export class User extends Model {
 	})
 	declare instructorId: string;
 
+	@ForeignKey(() => Department)
+	@Column({ type: DataType.UUID, allowNull: true })
+	declare departmentId: string;
+
+	@Column({ type: DataType.STRING, allowNull: true })
+	declare yearLevel: string;
+
+	@Column({ type: DataType.STRING, allowNull: true })
+	declare program: string;
+
+	@Column({ type: DataType.STRING, allowNull: true })
+	declare specialization: string;
+
+	@Column({ type: DataType.DATE, allowNull: true })
+	declare enrollmentDate: Date;
+
+	@Column({ type: DataType.DATE, allowNull: true })
+	declare graduationDate: Date;
+
 	@Column({
 		type: DataType.BOOLEAN,
 		defaultValue: true,
@@ -135,6 +154,9 @@ export class User extends Model {
 	declare updatedAt: Date;
 
 	// Associations
+	@BelongsTo(() => Department, "departmentId")
+	declare department: Department;
+
 	@HasMany(() => Department, "headId")
 	declare departmentsHeaded: Department[];
 
@@ -173,6 +195,9 @@ export class User extends Model {
 
 	@HasMany(() => Achievement, "awardedBy")
 	declare awardedAchievements: Achievement[];
+
+	@HasMany(() => AgencyRequirement, "createdBy")
+	declare createdAgencyRequirements: AgencyRequirement[];
 
 	// Instance methods from your existing model
 	public SignAccessToken(): string {
@@ -236,6 +261,15 @@ export class Department extends Model {
 	@Column({ type: DataType.UUID, allowNull: true })
 	declare headId: string;
 
+	@Column({ type: DataType.BOOLEAN, defaultValue: true })
+	declare isActive: boolean;
+
+	@Column({ type: DataType.STRING, allowNull: true })
+	declare color: string;
+
+	@Column({ type: DataType.STRING, allowNull: true })
+	declare icon: string;
+
 	@CreatedAt
 	declare createdAt: Date;
 
@@ -248,6 +282,12 @@ export class Department extends Model {
 
 	@HasMany(() => Course, "departmentId")
 	declare courses: Course[];
+
+	@HasMany(() => Agency, "departmentId")
+	declare agencies: Agency[];
+
+	@HasMany(() => User, "departmentId")
+	declare students: User[];
 }
 
 @Table({
@@ -279,6 +319,21 @@ export class Course extends Model {
 	@Column({ type: DataType.UUID, allowNull: false })
 	declare departmentId: string;
 
+	@Column({ type: DataType.BOOLEAN, defaultValue: true })
+	declare isActive: boolean;
+
+	@Column({ type: DataType.STRING, allowNull: true })
+	declare prerequisites: string;
+
+	@Column({ type: DataType.STRING, allowNull: true })
+	declare objectives: string;
+
+	@Column({ type: DataType.INTEGER, allowNull: true })
+	declare totalHours: number;
+
+	@Column({ type: DataType.STRING, allowNull: true })
+	declare level: string;
+
 	@CreatedAt
 	declare createdAt: Date;
 
@@ -291,6 +346,9 @@ export class Course extends Model {
 
 	@HasMany(() => Section, "courseId")
 	declare sections: Section[];
+
+	@HasMany(() => Practicum, "courseId")
+	declare practicums: Practicum[];
 }
 
 @Table({
@@ -308,6 +366,9 @@ export class Section extends Model {
 
 	@Column({ type: DataType.STRING, allowNull: false })
 	declare name: string;
+
+	@Column({ type: DataType.STRING, allowNull: false })
+	declare code: string;
 
 	@ForeignKey(() => Course)
 	@Column({ type: DataType.UUID, allowNull: false })
@@ -332,6 +393,21 @@ export class Section extends Model {
 	@Column({ type: DataType.BOOLEAN, defaultValue: true })
 	declare isActive: boolean;
 
+	@Column({ type: DataType.TEXT, allowNull: true })
+	declare description: string;
+
+	@Column({ type: DataType.STRING, allowNull: true })
+	declare schedule: string;
+
+	@Column({ type: DataType.STRING, allowNull: true })
+	declare room: string;
+
+	@Column({ type: DataType.DATE, allowNull: true })
+	declare startDate: Date;
+
+	@Column({ type: DataType.DATE, allowNull: true })
+	declare endDate: Date;
+
 	@CreatedAt
 	declare createdAt: Date;
 
@@ -347,6 +423,9 @@ export class Section extends Model {
 
 	@HasMany(() => StudentEnrollment, "sectionId")
 	declare enrollments: StudentEnrollment[];
+
+	@HasMany(() => Practicum, "sectionId")
+	declare practicums: Practicum[];
 }
 
 @Table({
@@ -452,6 +531,37 @@ export class Agency extends Model {
 	@Column({ type: DataType.BOOLEAN, defaultValue: true })
 	declare isActive: boolean;
 
+	@Column({ type: DataType.DECIMAL(10, 8), allowNull: true })
+	declare latitude: number;
+
+	@Column({ type: DataType.DECIMAL(11, 8), allowNull: true })
+	declare longitude: number;
+
+	@ForeignKey(() => Department)
+	@Column({ type: DataType.UUID, allowNull: true })
+	declare departmentId: string;
+
+	@Column({ type: DataType.TEXT, allowNull: true })
+	declare description: string;
+
+	@Column({ type: DataType.STRING, allowNull: true })
+	declare website: string;
+
+	@Column({ type: DataType.STRING, allowNull: true })
+	declare industry: string;
+
+	@Column({ type: DataType.INTEGER, allowNull: true })
+	declare maxStudents: number;
+
+	@Column({ type: DataType.STRING, allowNull: true })
+	declare partnershipType: string;
+
+	@Column({ type: DataType.DATE, allowNull: true })
+	declare partnershipStartDate: Date;
+
+	@Column({ type: DataType.DATE, allowNull: true })
+	declare partnershipEndDate: Date;
+
 	@CreatedAt
 	declare createdAt: Date;
 
@@ -459,11 +569,67 @@ export class Agency extends Model {
 	declare updatedAt: Date;
 
 	// Associations
+	@BelongsTo(() => Department, "departmentId")
+	declare department: Department;
+
 	@HasMany(() => Supervisor, "agencyId")
 	declare supervisors: Supervisor[];
 
 	@HasMany(() => Practicum, "agencyId")
 	declare practicums: Practicum[];
+
+	@HasMany(() => AgencyRequirement, "agencyId")
+	declare requirements: AgencyRequirement[];
+}
+
+@Table({
+	tableName: "agency_requirements",
+	timestamps: true,
+	modelName: "AgencyRequirement",
+})
+export class AgencyRequirement extends Model {
+	@Column({
+		type: DataType.UUID,
+		primaryKey: true,
+		defaultValue: DataType.UUIDV4,
+	})
+	declare id: string;
+
+	@ForeignKey(() => Agency)
+	@Column({ type: DataType.UUID, allowNull: false })
+	declare agencyId: string;
+
+	@Column({ type: DataType.STRING, allowNull: false })
+	declare title: string;
+
+	@Column({ type: DataType.TEXT, allowNull: false })
+	declare description: string;
+
+	@Column({
+		type: DataType.ENUM("health", "academic", "legal", "training", "other"),
+		allowNull: false,
+	})
+	declare category: "health" | "academic" | "legal" | "training" | "other";
+
+	@Column({
+		type: DataType.ENUM("required", "optional", "recommended"),
+		allowNull: false,
+		defaultValue: "required",
+	})
+	declare type: "required" | "optional" | "recommended";
+
+	@Column({ type: DataType.BOOLEAN, defaultValue: true })
+	declare isActive: boolean;
+
+	@CreatedAt
+	declare createdAt: Date;
+
+	@UpdatedAt
+	declare updatedAt: Date;
+
+	// Associations
+	@BelongsTo(() => Agency, "agencyId")
+	declare agency: Agency;
 }
 
 @Table({
@@ -544,6 +710,18 @@ export class Practicum extends Model {
 	@Column({ type: DataType.UUID, allowNull: false })
 	declare supervisorId: string;
 
+	@ForeignKey(() => Section)
+	@Column({ type: DataType.UUID, allowNull: true })
+	declare sectionId: string;
+
+	@ForeignKey(() => Course)
+	@Column({ type: DataType.UUID, allowNull: true })
+	declare courseId: string;
+
+	@ForeignKey(() => Department)
+	@Column({ type: DataType.UUID, allowNull: true })
+	declare departmentId: string;
+
 	@Column({ type: DataType.STRING, allowNull: false })
 	declare position: string;
 
@@ -567,11 +745,32 @@ export class Practicum extends Model {
 	declare workSetup: "On-site" | "Hybrid" | "Work From Home";
 
 	@Column({
-		type: DataType.ENUM("active", "completed", "inactive"),
+		type: DataType.ENUM("active", "completed", "inactive", "suspended", "terminated"),
 		allowNull: false,
 		defaultValue: "active",
 	})
-	declare status: "active" | "completed" | "inactive";
+	declare status: "active" | "completed" | "inactive" | "suspended" | "terminated";
+
+	@Column({ type: DataType.TEXT, allowNull: true })
+	declare objectives: string;
+
+	@Column({ type: DataType.TEXT, allowNull: true })
+	declare responsibilities: string;
+
+	@Column({ type: DataType.STRING, allowNull: true })
+	declare academicYear: string;
+
+	@Column({ type: DataType.STRING, allowNull: true })
+	declare semester: string;
+
+	@Column({ type: DataType.DATE, allowNull: true })
+	declare evaluationDate: Date;
+
+	@Column({ type: DataType.FLOAT, allowNull: true })
+	declare finalGrade: number;
+
+	@Column({ type: DataType.TEXT, allowNull: true })
+	declare remarks: string;
 
 	@CreatedAt
 	declare createdAt: Date;
@@ -589,11 +788,23 @@ export class Practicum extends Model {
 	@BelongsTo(() => Supervisor, "supervisorId")
 	declare supervisor: Supervisor;
 
+	@BelongsTo(() => Section, "sectionId")
+	declare section: Section;
+
+	@BelongsTo(() => Course, "courseId")
+	declare course: Course;
+
+	@BelongsTo(() => Department, "departmentId")
+	declare department: Department;
+
 	@HasMany(() => AttendanceRecord, "practicumId")
 	declare attendanceRecords: AttendanceRecord[];
 
 	@HasMany(() => Report, "practicumId")
 	declare reports: Report[];
+
+	@HasMany(() => Requirement, "practicumId")
+	declare requirements: Requirement[];
 }
 
 // ================================
@@ -1048,6 +1259,10 @@ export class Requirement extends Model {
 	@Column({ type: DataType.UUID, allowNull: true })
 	declare templateId: string;
 
+	@ForeignKey(() => Practicum)
+	@Column({ type: DataType.UUID, allowNull: true })
+	declare practicumId: string;
+
 	@Column({ type: DataType.STRING, allowNull: false })
 	declare title: string;
 
@@ -1135,6 +1350,9 @@ export class Requirement extends Model {
 
 	@BelongsTo(() => RequirementTemplate, "templateId")
 	declare template: RequirementTemplate;
+
+	@BelongsTo(() => Practicum, "practicumId")
+	declare practicum: Practicum;
 
 	@BelongsTo(() => User, "approvedBy")
 	declare approver: User;
@@ -1629,6 +1847,7 @@ export const models = [
 	Section,
 	StudentEnrollment,
 	Agency,
+	AgencyRequirement,
 	Supervisor,
 	Practicum,
 	AttendanceRecord,

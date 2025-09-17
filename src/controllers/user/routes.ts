@@ -25,7 +25,7 @@ router.get("/user/logout", isAuthenticated, logoutController);
 
 router.get("/user/me", isAuthenticated, getUserDetailsController);
 
-router.get("/user/refresh-token", isAuthenticated, refreshTokenController);
+router.get("/user/refresh-token", refreshTokenController);
 
 // Password reset
 router.post("/user/forgot-password", forgotPasswordController);

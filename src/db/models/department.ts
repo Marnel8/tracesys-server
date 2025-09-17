@@ -11,6 +11,7 @@ import {
 } from "sequelize-typescript";
 import User from "./user";
 import Course from "./course";
+import Agency from "./agency";
 
 @Table({
 	tableName: "departments",
@@ -38,6 +39,15 @@ export default class Department extends Model {
 	@Column({ type: DataType.UUID, allowNull: true })
 	declare headId: string;
 
+	@Column({ type: DataType.BOOLEAN, defaultValue: true })
+	declare isActive: boolean;
+
+	@Column({ type: DataType.STRING, allowNull: true })
+	declare color: string;
+
+	@Column({ type: DataType.STRING, allowNull: true })
+	declare icon: string;
+
 	@CreatedAt
 	declare createdAt: Date;
 
@@ -49,6 +59,12 @@ export default class Department extends Model {
 
 	@HasMany(() => Course, "departmentId")
 	declare courses: Course[];
+
+	@HasMany(() => Agency, "departmentId")
+	declare agencies: Agency[];
+
+	@HasMany(() => User, "departmentId")
+	declare students: User[];
 }
 
 

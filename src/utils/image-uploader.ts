@@ -3,11 +3,11 @@ import path from "path";
 import fs from "fs";
 import { BadRequestError } from "./error";
 
-// Get __dirname for CommonJS modules
-const __dirname = path.dirname(require.main?.filename || process.argv[1]);
+// Get current directory path
+const currentDir = __dirname;
 
 // Ensure uploads directory exists
-const uploadsDir = path.join(__dirname, "../uploads");
+const uploadsDir = path.join(currentDir, "../uploads");
 if (!fs.existsSync(uploadsDir)) {
 	fs.mkdirSync(uploadsDir, { recursive: true });
 }

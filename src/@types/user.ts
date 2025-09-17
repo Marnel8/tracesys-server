@@ -6,7 +6,7 @@ export interface IUser {
 	lastName: string;
 	email: string;
 	age: number;
-	contactNumber: string;
+	phone: string;
 	password: string;
 	role?: UserRole;
 	comparePassword: (password: string) => Promise<boolean>;
@@ -20,7 +20,7 @@ export type CreateUserParams = {
 	middleName?: string;
 	email: string;
 	age?: number;
-	contactNumber: string;
+	phone: string;
 	role?: UserRole;
 	password: string;
 	gender: Gender;
