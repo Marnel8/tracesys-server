@@ -1,13 +1,10 @@
 import multer from "multer";
 import path from "path";
 import fs from "fs";
-import { fileURLToPath } from "url";
 import { BadRequestError } from "./error";
 
-// Get current directory path (works in both CJS and ESM)
-const currentDir = typeof __dirname !== "undefined"
-    ? __dirname
-    : path.dirname(fileURLToPath(import.meta.url));
+// Get current directory path (CommonJS)
+const currentDir = __dirname;
 
 // Ensure uploads directory exists
 const uploadsDir = path.join(currentDir, "../uploads");
