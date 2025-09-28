@@ -8,6 +8,7 @@ import {
 	ForeignKey,
 	BelongsTo,
 	HasMany,
+	Index,
 } from "sequelize-typescript";
 import Department from "./department";
 import Supervisor from "./supervisor";
@@ -68,6 +69,7 @@ export default class Agency extends Model {
 	declare longitude: number;
 
 	@ForeignKey(() => Department)
+	@Index({ name: "idx_agencies_departmentId" })
 	@Column({ type: DataType.UUID, allowNull: true })
 	declare departmentId: string;
 
@@ -98,7 +100,7 @@ export default class Agency extends Model {
 	@UpdatedAt
 	declare updatedAt: Date;
 
-	@BelongsTo(() => Department, "departmentId")
+	@BelongsTo(() => Department, { foreignKey: "departmentId", onDelete: "SET NULL", onUpdate: "CASCADE" })
 	declare department: Department;
 
 	@HasMany(() => Supervisor, "agencyId")

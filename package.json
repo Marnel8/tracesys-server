@@ -13,11 +13,12 @@
     "copy-assets": "copyfiles -u 1 \"src/uploads/**/*\" \"dist/\" && copyfiles -u 1 \"src/assets/**/*\" \"dist/\" && copyfiles -u 1 \"src/mails/**/*\" \"dist/\"",
     "seed": "tsx -r tsconfig-paths/register seeders/index.ts",
     "seed:departments": "tsx -r tsconfig-paths/register -e \"import { seedDepartments } from './seeders/index'; import sequelize from './src/db'; sequelize.authenticate().then(() => seedDepartments()).finally(() => sequelize.close());\"",
+    "seed:departments:cjs": "tsx -r tsconfig-paths/register seeders/departments-cjs.ts",
     "migration:generate": "sequelize-cli migration:generate --migrations-path src/db/migrations --config config/config.json",
     "migration:up": "sequelize-cli db:migrate --migrations-path src/db/migrations --config config/config.json",
     "migration:down": "sequelize-cli db:migrate:undo --migrations-path src/db/migrations --config config/config.json"
   },
-  "author": "Batangas State University",
+  "author": "TraceSys",
   "license": "ISC",
   "dependencies": {
     "@types/bcryptjs": "^2.4.6",

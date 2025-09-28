@@ -31,14 +31,14 @@ interface StudentRegistrationData {
 	year: string;
 	semester: string;
 
-	// Practicum Information
-	agency: string;
-	agencyAddress: string;
-	supervisor: string;
-	supervisorEmail: string;
-	supervisorPhone: string;
-	startDate: string;
-	endDate: string;
+	// Practicum Information (Optional)
+	agency?: string;
+	agencyAddress?: string;
+	supervisor?: string;
+	supervisorEmail?: string;
+	supervisorPhone?: string;
+	startDate?: string;
+	endDate?: string;
 
 	// Account Settings
 	password: string;
@@ -53,7 +53,7 @@ export const createStudentController = async (req: Request, res: Response) => {
 		email,
 		phone,
 		age,
-		gender,
+        gender,
 		studentId,
 		department,
 		course,
@@ -78,14 +78,14 @@ export const createStudentController = async (req: Request, res: Response) => {
 	// Handle avatar upload if provided - use Cloudinary URL if available
 	const avatar = req.cloudUrls && req.cloudUrls.length > 0 ? req.cloudUrls[0] : "";
 
-	const studentData = {
+    const studentData = {
 		firstName,
 		lastName,
 		middleName,
 		email,
 		phone,
 		age,
-		gender,
+        gender: typeof gender === "string" ? gender.toLowerCase() : gender,
 		studentId,
 		password,
 		avatar,
@@ -94,13 +94,14 @@ export const createStudentController = async (req: Request, res: Response) => {
 		section,
 		year,
 		semester,
-		agency,
-		agencyAddress,
-		supervisor,
-		supervisorEmail,
-		supervisorPhone,
-		startDate,
-		endDate,
+		// Only include practicum data if provided
+		...(agency && { agency }),
+		...(agencyAddress && { agencyAddress }),
+		...(supervisor && { supervisor }),
+		...(supervisorEmail && { supervisorEmail }),
+		...(supervisorPhone && { supervisorPhone }),
+		...(startDate && { startDate }),
+		...(endDate && { endDate }),
 		sendCredentials,
 	};
 
@@ -178,10 +179,24 @@ export const updateStudentController = async (req: Request, res: Response) => {
 		email,
 		phone,
 		age,
-		gender,
+        gender,
 		address,
 		bio,
 		studentId,
+		// Academic Information
+		departmentId,
+		courseId,
+		sectionId,
+		yearLevel,
+		program,
+		// Practicum Information
+		agencyId,
+		supervisorId,
+		position,
+		startDate,
+		endDate,
+		totalHours,
+		workSetup,
 	} = req.body;
 
 	if (!id) {
@@ -191,18 +206,35 @@ export const updateStudentController = async (req: Request, res: Response) => {
 	// Handle avatar upload if provided - use Cloudinary URL if available
 	const avatar = req.cloudUrls && req.cloudUrls.length > 0 ? req.cloudUrls[0] : undefined;
 
-	const updateData = {
+    const updateData = {
+		// Personal Information
 		...(firstName && { firstName }),
 		...(lastName && { lastName }),
 		...(middleName !== undefined && { middleName }),
 		...(email && { email }),
 		...(phone && { phone }),
 		...(age !== undefined && { age }),
-		...(gender && { gender }),
+        ...(gender && { gender: typeof gender === "string" ? gender.toLowerCase() : gender }),
 		...(address !== undefined && { address }),
 		...(bio !== undefined && { bio }),
 		...(studentId !== undefined && { studentId }),
 		...(avatar && { avatar }),
+		
+		// Academic Information
+		...(departmentId && { departmentId }),
+		...(courseId && { courseId }),
+		...(sectionId && { sectionId }),
+		...(yearLevel && { yearLevel }),
+		...(program && { program }),
+		
+		// Practicum Information
+		...(agencyId && { agencyId }),
+		...(supervisorId && { supervisorId }),
+		...(position && { position }),
+		...(startDate && { startDate }),
+		...(endDate && { endDate }),
+		...(totalHours !== undefined && { totalHours }),
+		...(workSetup && { workSetup }),
 	};
 
 	const updatedStudent = await updateStudentData(id, updateData);
@@ -215,18 +247,25 @@ export const updateStudentController = async (req: Request, res: Response) => {
 };
 
 export const deleteStudentController = async (req: Request, res: Response) => {
-	const { id } = req.params;
+	try {
+		const { id } = req.params;
 
-	if (!id) {
-		throw new BadRequestError("Student ID is required.");
+		if (!id) {
+			throw new BadRequestError("Student ID is required.");
+		}
+
+		await deleteStudentData(id);
+
+		res.status(StatusCodes.OK).json({
+			success: true,
+			message: "Student deactivated successfully",
+		});
+	} catch (error: any) {
+		res.status(error.statusCode || StatusCodes.INTERNAL_SERVER_ERROR).json({
+			success: false,
+			message: error.message || "Failed to delete student",
+		});
 	}
-
-	await deleteStudentData(id);
-
-	res.status(StatusCodes.OK).json({
-		success: true,
-		message: "Student deactivated successfully",
-	});
 };
 
 // Helper function to send student credentials

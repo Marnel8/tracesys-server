@@ -7,6 +7,7 @@ import {
 	UpdatedAt,
 	ForeignKey,
 	BelongsTo,
+	Index,
 } from "sequelize-typescript";
 import User from "./user";
 import Section from "./section";
@@ -25,10 +26,14 @@ export default class StudentEnrollment extends Model {
 	declare id: string;
 
 	@ForeignKey(() => User)
+	@Index({ name: "idx_student_enrollments_studentId" })
+	@Index({ name: "uniq_student_enrollments_student_section", unique: true })
 	@Column({ type: DataType.UUID, allowNull: false })
 	declare studentId: string;
 
 	@ForeignKey(() => Section)
+	@Index({ name: "idx_student_enrollments_sectionId" })
+	@Index({ name: "uniq_student_enrollments_student_section", unique: true })
 	@Column({ type: DataType.UUID, allowNull: false })
 	declare sectionId: string;
 
@@ -51,10 +56,10 @@ export default class StudentEnrollment extends Model {
 	@UpdatedAt
 	declare updatedAt: Date;
 
-	@BelongsTo(() => User, "studentId")
+	@BelongsTo(() => User, { foreignKey: "studentId", onDelete: "CASCADE", onUpdate: "CASCADE" })
 	declare student: User;
 
-	@BelongsTo(() => Section, "sectionId")
+	@BelongsTo(() => Section, { foreignKey: "sectionId", onDelete: "CASCADE", onUpdate: "CASCADE" })
 	declare section: Section;
 }
 

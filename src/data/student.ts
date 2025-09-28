@@ -3,14 +3,14 @@ import User, { UserRole } from "@/db/models/user";
 import Department from "@/db/models/department";
 import Course from "@/db/models/course";
 import Section from "@/db/models/section";
-import StudentEnrollment from "@/db/models/student-enrollment";
 import Agency from "@/db/models/agency";
 import Supervisor from "@/db/models/supervisor";
 import Practicum from "@/db/models/practicum";
 import RequirementTemplate from "@/db/models/requirement-template";
 import Requirement from "@/db/models/requirement";
-import { BadRequestError, ConflictError, NotFoundError } from "@/utils/error";
+import { ConflictError, NotFoundError } from "@/utils/error";
 import { Op } from "sequelize";
+import StudentEnrollment from "@/db/models/student-enrollment";
 
 interface CreateStudentParams {
 	firstName: string;
@@ -28,14 +28,41 @@ interface CreateStudentParams {
 	section: string;
 	year: string;
 	semester: string;
-	agency: string;
-	agencyAddress: string;
-	supervisor: string;
-	supervisorEmail: string;
-	supervisorPhone: string;
-	startDate: string;
-	endDate: string;
+	// Optional practicum information
+	agency?: string;
+	agencyAddress?: string;
+	supervisor?: string;
+	supervisorEmail?: string;
+	supervisorPhone?: string;
+	startDate?: string;
+	endDate?: string;
 	sendCredentials?: boolean;
+}
+
+interface UpdateStudentParams {
+	firstName?: string;
+	lastName?: string;
+	middleName?: string;
+	email?: string;
+	phone?: string;
+	age?: number;
+	gender?: string;
+	studentId?: string;
+	avatar?: string;
+	address?: string;
+	bio?: string;
+	departmentId?: string;
+	courseId?: string;
+	sectionId?: string;
+	yearLevel?: string;
+	program?: string;
+	agencyId?: string;
+	supervisorId?: string;
+	position?: string;
+	startDate?: string;
+	endDate?: string;
+	totalHours?: number;
+	workSetup?: "On-site" | "Hybrid" | "Work From Home";
 }
 
 export const findStudentByID = async (id: string) => {
@@ -43,18 +70,52 @@ export const findStudentByID = async (id: string) => {
 		where: { id, role: UserRole.STUDENT },
 		include: [
 			{
+				model: Department,
+				as: "department",
+			},
+			{
 				model: Practicum,
 				as: "practicums",
-				include: [
-					{
-						model: Agency,
-						as: "agency",
-					},
-					{
-						model: Supervisor,
-						as: "supervisor",
-					},
-				],
+                include: [
+                    {
+                        model: Agency,
+                        as: "agency",
+                    },
+                    {
+                        model: Supervisor,
+                        as: "supervisor",
+                    },
+                    {
+                        model: Section,
+                        as: "section",
+                        include: [
+                            {
+                                model: Course,
+                                as: "course",
+                                include: [
+                                    {
+                                        model: Department,
+                                        as: "department",
+                                    },
+                                ],
+                            },
+                        ],
+                    },
+                    {
+                        model: Course,
+                        as: "course",
+                        include: [
+                            {
+                                model: Department,
+                                as: "department",
+                            },
+                        ],
+                    },
+                    {
+                        model: Department,
+                        as: "department",
+                    },
+                ],
 			},
 			{
 				model: StudentEnrollment,
@@ -67,6 +128,12 @@ export const findStudentByID = async (id: string) => {
 							{
 								model: Course,
 								as: "course",
+								include: [
+									{
+										model: Department,
+										as: "department",
+									},
+								],
 							},
 						],
 					},
@@ -236,69 +303,102 @@ export const createStudentData = async (studentData: CreateStudentParams) => {
 			{ transaction: t }
 		);
 
-		// Find or create agency
-		let agencyRecord = await Agency.findOne({
-			where: { name: studentData.agency },
-			transaction: t,
-		});
+        // Create practicum only if agency information is provided
+		let practicum = null;
+		if (studentData.agency && studentData.supervisor && studentData.startDate && studentData.endDate) {
+			// Find or create agency
+			let agencyRecord = await Agency.findOne({
+				where: { name: studentData.agency },
+				transaction: t,
+			});
 
-		if (!agencyRecord) {
-			agencyRecord = await Agency.create(
+			if (!agencyRecord) {
+				agencyRecord = await Agency.create(
+					{
+						name: studentData.agency,
+						address: studentData.agencyAddress || "",
+						contactPerson: studentData.supervisor,
+						contactRole: "Supervisor",
+						contactPhone: studentData.supervisorPhone || "",
+						contactEmail: studentData.supervisorEmail || "",
+						branchType: "Main",
+						isActive: true,
+					},
+					{ transaction: t }
+				);
+			}
+
+			// Find or create supervisor
+			let supervisorRecord = await Supervisor.findOne({
+				where: { email: studentData.supervisorEmail },
+				transaction: t,
+			});
+
+			if (!supervisorRecord) {
+				supervisorRecord = await Supervisor.create(
+					{
+						agencyId: agencyRecord.id,
+						name: studentData.supervisor,
+						email: studentData.supervisorEmail || "",
+						phone: studentData.supervisorPhone || "",
+						position: "Supervisor",
+						isActive: true,
+					},
+					{ transaction: t }
+				);
+			}
+
+			// Create practicum
+			practicum = await Practicum.create(
 				{
-					name: studentData.agency,
-					address: studentData.agencyAddress,
-					contactPerson: studentData.supervisor,
-					contactRole: "Supervisor",
-					contactPhone: studentData.supervisorPhone,
-					contactEmail: studentData.supervisorEmail,
-					branchType: "Main",
-					isActive: true,
-				},
-				{ transaction: t }
-			);
-		}
-
-		// Find or create supervisor
-		let supervisorRecord = await Supervisor.findOne({
-			where: { email: studentData.supervisorEmail },
-			transaction: t,
-		});
-
-		if (!supervisorRecord) {
-			supervisorRecord = await Supervisor.create(
-				{
+					studentId: user.id,
 					agencyId: agencyRecord.id,
-					name: studentData.supervisor,
-					email: studentData.supervisorEmail,
-					phone: studentData.supervisorPhone,
-					position: "Supervisor",
-					isActive: true,
+					supervisorId: supervisorRecord.id,
+                    sectionId: sectionRecord.id,
+                    courseId: courseRecord.id,
+                    departmentId: courseRecord.departmentId,
+					position: "Student Intern",
+					startDate: new Date(studentData.startDate),
+					endDate: new Date(studentData.endDate),
+					totalHours: 400,
+					completedHours: 0,
+					workSetup: "On-site",
+					status: "active",
 				},
 				{ transaction: t }
 			);
 		}
-
-		// Create practicum
-		const practicum = await Practicum.create(
-			{
-				studentId: user.id,
-				agencyId: agencyRecord.id,
-				supervisorId: supervisorRecord.id,
-				position: "Student Intern",
-				startDate: new Date(studentData.startDate),
-				endDate: new Date(studentData.endDate),
-				totalHours: 400,
-				completedHours: 0,
-				workSetup: "On-site",
-				status: "active",
-			},
-			{ transaction: t }
-		);
 
 		// Create default requirements for the student
 		await createDefaultRequirements(user.id, t);
 
 		await t.commit();
+
+		// Fetch practicum with related data if it exists
+		let practicumData = null;
+		if (practicum) {
+			const practicumWithRelations = await Practicum.findByPk(practicum.id, {
+				include: [
+					{
+						model: Agency,
+						as: "agency",
+					},
+					{
+						model: Supervisor,
+						as: "supervisor",
+					},
+				],
+				transaction: t,
+			});
+			
+			practicumData = {
+				id: practicumWithRelations!.id,
+				agency: practicumWithRelations!.agency?.name || "Not assigned",
+				supervisor: practicumWithRelations!.supervisor?.name || "Not assigned",
+				startDate: practicumWithRelations!.startDate,
+				endDate: practicumWithRelations!.endDate,
+			};
+		}
 
 		return {
 			user: {
@@ -310,13 +410,7 @@ export const createStudentData = async (studentData: CreateStudentParams) => {
 				studentId: user.studentId,
 				role: user.role,
 			},
-			practicum: {
-				id: practicum.id,
-				agency: agencyRecord.name,
-				supervisor: supervisorRecord.name,
-				startDate: practicum.startDate,
-				endDate: practicum.endDate,
-			},
+			practicum: practicumData,
 			enrollment: {
 				course: courseRecord.name,
 				section: sectionRecord.name,
@@ -444,10 +538,10 @@ export const getStudentsData = async (params: {
 
 	if (search) {
 		whereClause[Op.or] = [
-			{ firstName: { [Op.iLike]: `%${search}%` } },
-			{ lastName: { [Op.iLike]: `%${search}%` } },
-			{ email: { [Op.iLike]: `%${search}%` } },
-			{ studentId: { [Op.iLike]: `%${search}%` } },
+			{ firstName: { [Op.like]: `%${search}%` } },
+			{ lastName: { [Op.like]: `%${search}%` } },
+			{ email: { [Op.like]: `%${search}%` } },
+			{ studentId: { [Op.like]: `%${search}%` } },
 		];
 	}
 
@@ -466,6 +560,22 @@ export const getStudentsData = async (params: {
 						model: Supervisor,
 						as: "supervisor",
 					},
+                    {
+                        model: Section,
+                        as: "section",
+                        include: [
+                            {
+                                model: Course,
+                                as: "course",
+                                include: [
+                                    {
+                                        model: Department,
+                                        as: "department",
+                                    },
+                                ],
+                            },
+                        ],
+                    },
 				],
 			},
 			{
@@ -484,6 +594,10 @@ export const getStudentsData = async (params: {
 					},
 				],
 			},
+            {
+                model: Requirement,
+                as: "requirements",
+            },
 		],
 		limit,
 		offset,
@@ -492,6 +606,9 @@ export const getStudentsData = async (params: {
 
 	return {
 		students: students.rows,
+		enrollments: students.rows.map(student => student.enrollments),
+		practicums: students.rows.map(student => student.practicums),
+		requirements: students.rows.map(student => student.requirements),
 		pagination: {
 			currentPage: page,
 			totalPages: Math.ceil(students.count / limit),
@@ -501,7 +618,7 @@ export const getStudentsData = async (params: {
 	};
 };
 
-export const updateStudentData = async (id: string, studentData: Partial<CreateStudentParams>) => {
+export const updateStudentData = async (id: string, studentData: UpdateStudentParams) => {
 	const t = await sequelize.transaction();
 
 	const student = await User.findByPk(id);
@@ -544,9 +661,68 @@ export const updateStudentData = async (id: string, studentData: Partial<CreateS
 			...(studentData.gender && { gender: studentData.gender }),
 			...(studentData.avatar !== undefined && { avatar: studentData.avatar }),
 			...(studentData.studentId !== undefined && { studentId: studentData.studentId }),
+			...(studentData.address !== undefined && { address: studentData.address }),
+			...(studentData.bio !== undefined && { bio: studentData.bio }),
+			...(studentData.departmentId && { departmentId: studentData.departmentId }),
+			...(studentData.yearLevel && { yearLevel: studentData.yearLevel }),
+			...(studentData.program && { program: studentData.program }),
 		},
 		{ transaction: t }
 	);
+
+	// Update enrollment if sectionId is provided
+	if (studentData.sectionId) {
+		const enrollment = await StudentEnrollment.findOne({
+			where: { studentId: id },
+			transaction: t
+		});
+
+		if (enrollment) {
+			await enrollment.update(
+				{ sectionId: studentData.sectionId },
+				{ transaction: t }
+			);
+		}
+	}
+
+	// Update practicum if practicum data is provided
+    if (studentData.agencyId || studentData.supervisorId || studentData.position || 
+        studentData.startDate || studentData.endDate || studentData.totalHours !== undefined || 
+        studentData.workSetup || studentData.sectionId || studentData.courseId || studentData.departmentId) {
+		
+		const practicum = await Practicum.findOne({
+			where: { studentId: id },
+			transaction: t
+		});
+
+		if (practicum) {
+			const practicumUpdateData: any = {};
+			if (studentData.agencyId) practicumUpdateData.agencyId = studentData.agencyId;
+			if (studentData.supervisorId) practicumUpdateData.supervisorId = studentData.supervisorId;
+			if (studentData.position) practicumUpdateData.position = studentData.position;
+			if (studentData.startDate) practicumUpdateData.startDate = studentData.startDate;
+			if (studentData.endDate) practicumUpdateData.endDate = studentData.endDate;
+			if (studentData.totalHours !== undefined) practicumUpdateData.totalHours = studentData.totalHours;
+			if (studentData.workSetup) practicumUpdateData.workSetup = studentData.workSetup;
+			if (studentData.courseId) practicumUpdateData.courseId = studentData.courseId;
+			if (studentData.departmentId) practicumUpdateData.departmentId = studentData.departmentId;
+			if (studentData.sectionId) practicumUpdateData.sectionId = studentData.sectionId;
+
+            // Derive courseId/departmentId from sectionId if provided and not explicitly set
+            if (studentData.sectionId && (!studentData.courseId || !studentData.departmentId)) {
+                const section = await Section.findByPk(studentData.sectionId, {
+                    include: [{ model: Course, as: "course" }],
+                    transaction: t,
+                });
+                if (section?.course) {
+                    if (!studentData.courseId) practicumUpdateData.courseId = section.course.id;
+                    if (!studentData.departmentId) practicumUpdateData.departmentId = section.course.departmentId;
+                }
+            }
+
+			await practicum.update(practicumUpdateData, { transaction: t });
+		}
+	}
 
 	await t.commit();
 
@@ -594,68 +770,139 @@ export const getStudentsByTeacherData = async (params: {
 
 	if (search) {
 		whereClause[Op.or] = [
-			{ firstName: { [Op.iLike]: `%${search}%` } },
-			{ lastName: { [Op.iLike]: `%${search}%` } },
-			{ email: { [Op.iLike]: `%${search}%` } },
-			{ studentId: { [Op.iLike]: `%${search}%` } },
+			{ firstName: { [Op.like]: `%${search}%` } },
+			{ lastName: { [Op.like]: `%${search}%` } },
+			{ email: { [Op.like]: `%${search}%` } },
+			{ studentId: { [Op.like]: `%${search}%` } },
 		];
 	}
 
-	const students = await User.findAndCountAll({
-		where: whereClause,
-		include: [
-			{
-				model: Practicum,
-				as: "practicums",
-				include: [
-					{
-						model: Agency,
-						as: "agency",
-					},
-					{
-						model: Supervisor,
-						as: "supervisor",
-					},
-				],
-			},
-			// {
-			// 	model: StudentEnrollment,
-			// 	as: "enrollments",
-			// 	required: true, // Only include students who have enrollments
-			// 	include: [
-			// 		{
-			// 			model: Section,
-			// 			as: "section",
-			// 			required: true,
-			// 			where: { instructorId: teacherId }, // Filter by teacher ID
-			// 			include: [
-			// 				{
-			// 					model: Course,
-			// 					as: "course",
-			// 				},
-			// 			],
-			// 		},
-			// 	],
-			// },
-		],
-		limit,
-		offset,
-		order: [["createdAt", "DESC"]],
-	});
+	try {
+		// Query StudentEnrollment with all necessary includes
+		const enrollments = await StudentEnrollment.findAndCountAll({
+			include: [
+				{
+					model: User,
+					as: "student",
+					where: whereClause,
+					include: [
+						{
+							model: Department,
+							as: "department",
+						},
+						{
+							model: Practicum,
+							as: "practicums",
+							include: [
+								{
+									model: Agency,
+									as: "agency",
+								},
+								{
+									model: Supervisor,
+									as: "supervisor",
+								},
+							],
+						},
+					],
+				},
+				{
+					model: Section,
+					as: "section",
+					where: { instructorId: teacherId },
+					include: [
+						{
+							model: Course,
+							as: "course",
+							include: [
+								{
+									model: Department,
+									as: "department",
+								},
+							],
+						},
+					],
+				},
+			],
+			limit,
+			offset,
+			order: [["createdAt", "DESC"]],
+		});
 
-	return {
-		students: students.rows,
-		teacher: {
-			id: teacher.id,
-			firstName: teacher.firstName,
-			lastName: teacher.lastName,
-			email: teacher.email,
-		},
-		pagination: {
-			currentPage: page,
-			totalPages: Math.ceil(students.count / limit),
-			totalItems: students.count,
-			itemsPerPage: limit,
-		},
-	};
+		// Get the students from the enrollments
+		const students = enrollments.rows.map(enrollment => {
+			const student = enrollment.student;
+			// Attach enrollment data to student
+			student.enrollments = [enrollment];
+			return student;
+		});
+
+		// Add additional data for each student
+		const enrichedStudents = students.map(student => {
+			// Get the current enrollment
+			const enrollment = student.enrollments?.[0];
+			const section = enrollment?.section;
+			const course = section?.course;
+			const practicum = student.practicums?.[0];
+			const agency = practicum?.agency;
+			
+
+			const computedFields = {
+				courseName: course?.name || course?.code || "-",
+				courseCode: course?.code || "-",
+				sectionName: section?.name || "-",
+				academicYear: section?.academicYear || "-",
+				agencyName: agency?.name || "-",
+				agencyDetails: agency ? {
+					name: agency.name,
+					address: agency.address,
+					contactPerson: agency.contactPerson,
+					contactPhone: agency.contactPhone,
+					contactEmail: agency.contactEmail,
+				} : null,
+				practicumDetails: practicum ? {
+					position: practicum.position,
+					startDate: practicum.startDate,
+					endDate: practicum.endDate,
+					totalHours: practicum.totalHours,
+					completedHours: practicum.completedHours,
+					workSetup: practicum.workSetup,
+					status: practicum.status,
+				} : null,
+				// Placeholder data for future implementation
+				attendance: undefined as number | undefined,
+				requirements: undefined as number | undefined,
+				reports: undefined as number | undefined,
+			};
+			
+			
+			return {
+				...student.toJSON(),
+				// Ensure all required fields are present
+				enrollments: student.enrollments || [],
+				practicums: student.practicums || [],
+				// Add computed fields for easier frontend access
+				computed: computedFields
+			};
+		});
+
+		return {
+			students: enrichedStudents,
+			teacher: {
+				id: teacher.id,
+				firstName: teacher.firstName,
+				lastName: teacher.lastName,
+				email: teacher.email,
+			},
+			pagination: {
+				currentPage: page,
+				totalPages: Math.ceil(enrollments.count / limit),
+				totalItems: enrollments.count,
+				itemsPerPage: limit,
+			},
+		};
+	} catch (error) {
+		console.error("Error in getStudentsByTeacherData:", error);
+		throw error;
+	}
 };

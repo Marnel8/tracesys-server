@@ -62,6 +62,7 @@ const seedDepartments = async () => {
 
 const runSeeders = async () => {
 	try {
+		// Test database connection
 		await sequelize.authenticate();
 		console.log(colors.green("Connected to database successfully"));
 
@@ -73,15 +74,36 @@ const runSeeders = async () => {
 		console.error(colors.red("❌ Seeding failed:"), error);
 		process.exit(1);
 	} finally {
-		await sequelize.close();
-		console.log(colors.blue("Database connection closed"));
+		try {
+			await sequelize.close();
+			console.log(colors.blue("Database connection closed"));
+		} catch (closeError) {
+			console.error(colors.yellow("Warning: Error closing database connection:"), closeError);
+		}
 	}
 };
 
 // Run seeders if this file is executed directly
-if (require.main === module) {
-	runSeeders();
+// Check if this file is being run directly (simplified check)
+const isMainModule = process.argv[1] && process.argv[1].endsWith('departments-cjs.ts');
+
+if (isMainModule) {
+	// Add timeout to prevent hanging
+	const timeout = setTimeout(() => {
+		console.error(colors.red("❌ Seeding timed out after 30 seconds"));
+		process.exit(1);
+	}, 30000);
+
+	runSeeders()
+		.then(() => {
+			clearTimeout(timeout);
+		})
+		.catch((error) => {
+			clearTimeout(timeout);
+			console.error(colors.red("❌ Seeding failed:"), error);
+			process.exit(1);
+		});
 }
 
+// ES module exports
 export { runSeeders, seedDepartments };
-module.exports = { runSeeders, seedDepartments };

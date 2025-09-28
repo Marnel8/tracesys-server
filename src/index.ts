@@ -45,7 +45,7 @@ routes.forEach((route) => {
 });
 
 app.listen(PORT, () => {
-	console.log(colors.cyan(`Trioe Server running on port: ${PORT}`));
+	console.log(colors.cyan(`TRACESYS Server running on port: ${PORT}`));
 });
 
 // testing api

@@ -12,7 +12,8 @@ import {
 	BeforeUpdate,
 	ForeignKey,
 	BelongsTo,
-    Unique,
+	    Unique,
+	Index,
 } from "sequelize-typescript";
 import dotenv from "dotenv";
 import Department from "./department";
@@ -104,6 +105,7 @@ export default class User extends Model {
 	declare bio: string;
 
 	@Unique("users_student_id_unique")
+	@Index({ name: "idx_users_studentId" })
 	@Column({
 		type: DataType.STRING,
 		allowNull: true,
@@ -111,6 +113,7 @@ export default class User extends Model {
 	declare studentId: string;
 
 	@Unique("users_instructor_id_unique")
+	@Index({ name: "idx_users_instructorId" })
 	@Column({
 		type: DataType.STRING,
 		allowNull: true,
@@ -118,6 +121,7 @@ export default class User extends Model {
 	declare instructorId: string;
 
 	@ForeignKey(() => Department)
+	@Index({ name: "idx_users_departmentId" })
 	@Column({ type: DataType.UUID, allowNull: true })
 	declare departmentId: string;
 
@@ -158,7 +162,7 @@ export default class User extends Model {
 	declare updatedAt: Date;
 
 	// Associations
-	@BelongsTo(() => Department, "departmentId")
+	@BelongsTo(() => Department, { foreignKey: "departmentId", onDelete: "SET NULL", onUpdate: "CASCADE" })
 	declare department: Department;
 
 	@HasMany(() => Department, "headId")

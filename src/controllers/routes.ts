@@ -4,7 +4,8 @@ import agencyRoutes from "./agency/routes";
 import departmentRoutes from "./department/routes";
 import courseRoutes from "./course/routes";
 import sectionRoutes from "./section/routes";
+import announcementRoutes from "./announcement/routes";
 
-export const routes = [usersRoutes, studentRoutes, agencyRoutes, departmentRoutes, courseRoutes, sectionRoutes] as const;
+export const routes = [usersRoutes, studentRoutes, agencyRoutes, departmentRoutes, courseRoutes, sectionRoutes, announcementRoutes] as const;
 
 export type AppRoutes = (typeof routes)[number];

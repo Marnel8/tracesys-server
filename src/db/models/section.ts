@@ -8,6 +8,7 @@ import {
 	ForeignKey,
 	BelongsTo,
 	HasMany,
+	Index,
 } from "sequelize-typescript";
 import Course from "./course";
 import User from "./user";
@@ -34,10 +35,12 @@ export default class Section extends Model {
 	declare code: string;
 
 	@ForeignKey(() => Course)
+	@Index({ name: "idx_sections_courseId" })
 	@Column({ type: DataType.UUID, allowNull: true })
 	declare courseId: string;
 
 	@ForeignKey(() => User)
+	@Index({ name: "idx_sections_instructorId" })
 	@Column({ type: DataType.UUID, allowNull: true })
 	declare instructorId: string;
 
@@ -77,10 +80,10 @@ export default class Section extends Model {
 	@UpdatedAt
 	declare updatedAt: Date;
 
-	@BelongsTo(() => Course, "courseId")
+	@BelongsTo(() => Course, { foreignKey: "courseId", onDelete: "SET NULL", onUpdate: "CASCADE" })
 	declare course: Course;
 
-	@BelongsTo(() => User, "instructorId")
+	@BelongsTo(() => User, { foreignKey: "instructorId", onDelete: "SET NULL", onUpdate: "CASCADE" })
 	declare instructor: User;
 
 	@HasMany(() => StudentEnrollment, "sectionId")
