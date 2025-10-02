@@ -3,11 +3,16 @@ import path from "path";
 import fs from "fs";
 import { BadRequestError } from "./error";
 
-// Get current directory path (CommonJS)
-const currentDir = __dirname;
+// Resolve uploads directory without relying on __dirname (works in CJS and ESM)
+const projectRoot = process.cwd();
+const candidateUploads = [
+	path.join(projectRoot, "uploads"),
+	path.join(projectRoot, "src", "uploads"),
+	path.join(projectRoot, "dist", "uploads"),
+];
+const uploadsDir = candidateUploads.find((p) => fs.existsSync(p)) || candidateUploads[0];
 
 // Ensure uploads directory exists
-const uploadsDir = path.join(currentDir, "../uploads");
 if (!fs.existsSync(uploadsDir)) {
 	fs.mkdirSync(uploadsDir, { recursive: true });
 }

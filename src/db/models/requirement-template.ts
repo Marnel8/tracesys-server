@@ -56,6 +56,19 @@ export default class RequirementTemplate extends Model {
 	@Column({ type: DataType.INTEGER, allowNull: true })
 	declare maxFileSize: number;
 
+	// Optional downloadable template file metadata
+	@Column({ type: DataType.TEXT, allowNull: true })
+	declare templateFileUrl: string;
+
+	@Column({ type: DataType.STRING, allowNull: true })
+	declare templateFileName: string;
+
+	@Column({ type: DataType.STRING, allowNull: true })
+	declare templateFileType: string;
+
+	@Column({ type: DataType.INTEGER, allowNull: true })
+	declare templateFileSize: number; // bytes
+
 	@Column({ type: DataType.BOOLEAN, defaultValue: true })
 	declare isActive: boolean;
 

@@ -1,6 +1,7 @@
 import "dotenv/config";
 import sequelize from "../src/db";
 import Department from "../src/db/models/department";
+import { seedRequirementTemplates } from "./requirement-templates";
 import colors from "colors";
 
 const seedDepartments = async () => {
@@ -67,6 +68,7 @@ const runSeeders = async () => {
 
 		// Run all seeders
 		await seedDepartments();
+		await seedRequirementTemplates();
 
 		console.log(colors.green("\n✅ All seeders completed successfully!"));
 	} catch (error) {

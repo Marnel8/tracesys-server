@@ -18,6 +18,7 @@ import {
 	deleteSupervisorData,
 	getAgencySupervisorStats
 } from "@/data/agency";
+import { logAuditEvent } from "@/middlewares/audit";
 
 // Agency data interface
 interface AgencyData {
@@ -83,10 +84,27 @@ export const createAgencyController = async (req: Request, res: Response) => {
 
 	const result = await createAgencyData(agencyData);
 
+	// createAgencyData returns an object { agency }, normalize to entity
+	const createdAgency = (result as any).agency ?? result;
+
+	// Log audit event
+	await logAuditEvent(req, {
+		action: "Agency Created",
+		resource: "Agency Management",
+		resourceId: createdAgency.id,
+		details: `Created agency: ${createdAgency.name}`,
+		category: "user_management",
+		severity: "medium",
+		metadata: {
+			agencyName: createdAgency.name,
+			agencyId: createdAgency.id,
+		},
+	});
+
 	res.status(StatusCodes.CREATED).json({
 		success: true,
 		message: "Agency created successfully",
-		data: result,
+		data: createdAgency,
 	});
 };
 
@@ -143,6 +161,21 @@ export const updateAgencyController = async (req: Request, res: Response) => {
 
 	const result = await updateAgencyData(id, updateData);
 
+	// Log audit event
+	await logAuditEvent(req, {
+		action: "Agency Updated",
+		resource: "Agency Management",
+		resourceId: id,
+		details: `Updated agency: ${result.name}`,
+		category: "user_management",
+		severity: "medium",
+		metadata: {
+			agencyName: result.name,
+			agencyId: id,
+			updatedFields: Object.keys(updateData),
+		},
+	});
+
 	res.status(StatusCodes.OK).json({
 		success: true,
 		message: "Agency updated successfully",
@@ -164,6 +197,20 @@ export const deleteAgencyController = async (req: Request, res: Response) => {
 	}
 
 	await deleteAgencyData(id);
+
+	// Log audit event
+	await logAuditEvent(req, {
+		action: "Agency Deleted",
+		resource: "Agency Management",
+		resourceId: id,
+		details: `Deleted agency: ${agency.name}`,
+		category: "user_management",
+		severity: "high",
+		metadata: {
+			agencyName: agency.name,
+			agencyId: id,
+		},
+	});
 
 	res.status(StatusCodes.OK).json({
 		success: true,

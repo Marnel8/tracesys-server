@@ -4,6 +4,7 @@ import {
 	Model,
 	DataType,
 	CreatedAt,
+	UpdatedAt,
 	ForeignKey,
 	BelongsTo,
 } from "sequelize-typescript";
@@ -11,9 +12,8 @@ import User from "./user";
 
 @Table({
 	tableName: "audit_logs",
-	timestamps: false,
+	timestamps: true,
 	modelName: "AuditLog",
-	updatedAt: false,
 })
 export default class AuditLog extends Model {
 	@Column({
@@ -94,6 +94,9 @@ export default class AuditLog extends Model {
 
 	@CreatedAt
 	declare createdAt: Date;
+
+	@UpdatedAt
+	declare updatedAt: Date;
 
 	@BelongsTo(() => User, "userId")
 	declare user: User;

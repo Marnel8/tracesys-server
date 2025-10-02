@@ -12,6 +12,8 @@
     "build": "tsc --project tsconfig.json && tsc-alias -p tsconfig.json --resolve-full-paths && pnpm run copy-assets",
     "copy-assets": "copyfiles -u 1 \"src/uploads/**/*\" \"dist/\" && copyfiles -u 1 \"src/assets/**/*\" \"dist/\" && copyfiles -u 1 \"src/mails/**/*\" \"dist/\"",
     "seed": "tsx -r tsconfig-paths/register seeders/index.ts",
+    "seed:all": "pnpm run seed",
+    "seed:requirements": "tsx -r tsconfig-paths/register -e \"import { seedRequirementTemplates } from './seeders/requirement-templates'; import sequelize from './src/db'; sequelize.authenticate().then(() => seedRequirementTemplates()).finally(() => sequelize.close());\"",
     "seed:departments": "tsx -r tsconfig-paths/register -e \"import { seedDepartments } from './seeders/index'; import sequelize from './src/db'; sequelize.authenticate().then(() => seedDepartments()).finally(() => sequelize.close());\"",
     "seed:departments:cjs": "tsx -r tsconfig-paths/register seeders/departments-cjs.ts",
     "migration:generate": "sequelize-cli migration:generate --migrations-path src/db/migrations --config config/config.json",

@@ -8,6 +8,7 @@ import Supervisor from "@/db/models/supervisor";
 import Practicum from "@/db/models/practicum";
 import RequirementTemplate from "@/db/models/requirement-template";
 import Requirement from "@/db/models/requirement";
+import AttendanceRecord from "@/db/models/attendance-record";
 import { ConflictError, NotFoundError } from "@/utils/error";
 import { Op } from "sequelize";
 import StudentEnrollment from "@/db/models/student-enrollment";
@@ -686,27 +687,27 @@ export const updateStudentData = async (id: string, studentData: UpdateStudentPa
 	}
 
 	// Update practicum if practicum data is provided
-    if (studentData.agencyId || studentData.supervisorId || studentData.position || 
-        studentData.startDate || studentData.endDate || studentData.totalHours !== undefined || 
-        studentData.workSetup || studentData.sectionId || studentData.courseId || studentData.departmentId) {
+	    if (studentData.agencyId || studentData.supervisorId || studentData.position || 
+	        studentData.startDate || studentData.endDate || studentData.totalHours !== undefined || 
+	        studentData.workSetup || studentData.sectionId || studentData.courseId || studentData.departmentId) {
 		
-		const practicum = await Practicum.findOne({
-			where: { studentId: id },
-			transaction: t
-		});
+			const practicum = await Practicum.findOne({
+				where: { studentId: id },
+				transaction: t
+			});
 
-		if (practicum) {
-			const practicumUpdateData: any = {};
-			if (studentData.agencyId) practicumUpdateData.agencyId = studentData.agencyId;
-			if (studentData.supervisorId) practicumUpdateData.supervisorId = studentData.supervisorId;
-			if (studentData.position) practicumUpdateData.position = studentData.position;
-			if (studentData.startDate) practicumUpdateData.startDate = studentData.startDate;
-			if (studentData.endDate) practicumUpdateData.endDate = studentData.endDate;
-			if (studentData.totalHours !== undefined) practicumUpdateData.totalHours = studentData.totalHours;
-			if (studentData.workSetup) practicumUpdateData.workSetup = studentData.workSetup;
-			if (studentData.courseId) practicumUpdateData.courseId = studentData.courseId;
-			if (studentData.departmentId) practicumUpdateData.departmentId = studentData.departmentId;
-			if (studentData.sectionId) practicumUpdateData.sectionId = studentData.sectionId;
+			if (practicum) {
+				const practicumUpdateData: any = {};
+				if (studentData.agencyId) practicumUpdateData.agencyId = studentData.agencyId;
+				if (studentData.supervisorId) practicumUpdateData.supervisorId = studentData.supervisorId;
+				if (studentData.position) practicumUpdateData.position = studentData.position;
+				if (studentData.startDate) practicumUpdateData.startDate = studentData.startDate;
+				if (studentData.endDate) practicumUpdateData.endDate = studentData.endDate;
+				if (studentData.totalHours !== undefined) practicumUpdateData.totalHours = studentData.totalHours;
+				if (studentData.workSetup) practicumUpdateData.workSetup = studentData.workSetup;
+				if (studentData.courseId) practicumUpdateData.courseId = studentData.courseId;
+				if (studentData.departmentId) practicumUpdateData.departmentId = studentData.departmentId;
+				if (studentData.sectionId) practicumUpdateData.sectionId = studentData.sectionId;
 
             // Derive courseId/departmentId from sectionId if provided and not explicitly set
             if (studentData.sectionId && (!studentData.courseId || !studentData.departmentId)) {
@@ -720,8 +721,55 @@ export const updateStudentData = async (id: string, studentData: UpdateStudentPa
                 }
             }
 
-			await practicum.update(practicumUpdateData, { transaction: t });
-		}
+				await practicum.update(practicumUpdateData, { transaction: t });
+			} else {
+				// No existing practicum; create one if sufficient data provided (mirror create flow)
+				if (studentData.agencyId && studentData.supervisorId) {
+					let sectionIdToUse = studentData.sectionId || null;
+					let courseIdToUse = studentData.courseId || null;
+					let departmentIdToUse = studentData.departmentId || null;
+
+					// If no section provided, use current enrollment's section
+					if (!sectionIdToUse) {
+						const enrollment = await StudentEnrollment.findOne({
+							where: { studentId: id },
+							transaction: t,
+						});
+						sectionIdToUse = (enrollment && (enrollment as any).sectionId) || null;
+					}
+
+					// Derive course/department from section if missing
+					if (sectionIdToUse && (!courseIdToUse || !departmentIdToUse)) {
+						const section = await Section.findByPk(sectionIdToUse, {
+							include: [{ model: Course, as: "course" }],
+							transaction: t,
+						});
+						if (section && (section as any).course) {
+							if (!courseIdToUse) courseIdToUse = (section as any).course.id;
+							if (!departmentIdToUse) departmentIdToUse = (section as any).course.departmentId;
+						}
+					}
+
+					await Practicum.create(
+						{
+							studentId: id,
+							agencyId: studentData.agencyId,
+							supervisorId: studentData.supervisorId,
+							sectionId: sectionIdToUse || undefined,
+							courseId: courseIdToUse || undefined,
+							departmentId: departmentIdToUse || undefined,
+							position: studentData.position || "Student Intern",
+							startDate: studentData.startDate ? new Date(studentData.startDate) : undefined,
+							endDate: studentData.endDate ? new Date(studentData.endDate) : undefined,
+							totalHours: studentData.totalHours ?? 400,
+							completedHours: 0,
+							workSetup: studentData.workSetup || "On-site",
+							status: "active",
+						},
+						{ transaction: t }
+					);
+				}
+			}
 	}
 
 	await t.commit();
@@ -803,6 +851,14 @@ export const getStudentsByTeacherData = async (params: {
 									as: "supervisor",
 								},
 							],
+						},
+						{
+							model: Requirement,
+							as: "requirements",
+						},
+						{
+							model: AttendanceRecord,
+							as: "attendanceRecords",
 						},
 					],
 				},

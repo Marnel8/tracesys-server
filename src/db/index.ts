@@ -83,7 +83,7 @@ sequelize
 
 // To run a one-time destructive sync use DB_SYNC_FORCE=true (not recommended in prod)
 if (process.env.DB_SYNC_FORCE === "true") {
-	sequelize.sync({ alter: true, force: true }).then(() => {
+	sequelize.sync({ alter: true, force: false }).then(() => {
 		console.log(colors.red("Database FORCE synchronized - all tables dropped and recreated."));
 	});
 }

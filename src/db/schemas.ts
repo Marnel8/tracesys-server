@@ -1069,7 +1069,7 @@ export class Report extends Model {
 	declare studentId: string;
 
 	@ForeignKey(() => Practicum)
-	@Column({ type: DataType.UUID, allowNull: false })
+	@Column({ type: DataType.UUID, allowNull: true })
 	declare practicumId: string;
 
 	@ForeignKey(() => ReportTemplate)

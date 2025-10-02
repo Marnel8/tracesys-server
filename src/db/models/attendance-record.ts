@@ -71,6 +71,125 @@ export default class AttendanceRecord extends Model {
 	@Column({ type: DataType.TEXT, allowNull: true })
 	declare remarks: string;
 
+	// Agency Information Fields
+	@Column({ type: DataType.STRING, allowNull: true })
+	declare agencyName: string;
+
+	@Column({ type: DataType.TEXT, allowNull: true })
+	declare agencyLocation: string;
+
+	@Column({
+		type: DataType.ENUM("On-site", "Hybrid", "Work From Home"),
+		allowNull: true,
+	})
+	declare workSetup: "On-site" | "Hybrid" | "Work From Home";
+
+	@Column({
+		type: DataType.ENUM("Main", "Branch"),
+		allowNull: true,
+	})
+	declare branchType: "Main" | "Branch";
+
+	@Column({ type: DataType.TIME, allowNull: true })
+	declare openingTime: string;
+
+	@Column({ type: DataType.TIME, allowNull: true })
+	declare closingTime: string;
+
+	@Column({ type: DataType.STRING, allowNull: true })
+	declare contactPerson: string;
+
+	@Column({ type: DataType.STRING, allowNull: true })
+	declare contactRole: string;
+
+	@Column({ type: DataType.STRING, allowNull: true })
+	declare contactPhone: string;
+
+	@Column({ type: DataType.STRING, allowNull: true, validate: { isEmail: true } })
+	declare contactEmail: string;
+
+	// Device Tracking Fields for Time In
+	@Column({
+		type: DataType.ENUM("Inside", "In-field", "Outside"),
+		allowNull: true,
+	})
+	declare timeInLocationType: "Inside" | "In-field" | "Outside";
+
+	@Column({
+		type: DataType.ENUM("Mobile", "Desktop", "Tablet"),
+		allowNull: true,
+	})
+	declare timeInDeviceType: "Mobile" | "Desktop" | "Tablet";
+
+	@Column({ type: DataType.STRING, allowNull: true })
+	declare timeInDeviceUnit: string;
+
+	@Column({ type: DataType.STRING, allowNull: true })
+	declare timeInMacAddress: string;
+
+	@Column({
+		type: DataType.ENUM("Normal", "Late", "Early"),
+		allowNull: true,
+		defaultValue: "Normal",
+	})
+	declare timeInRemarks: "Normal" | "Late" | "Early";
+
+	@Column({ type: DataType.TEXT, allowNull: true })
+	declare timeInExactLocation: string;
+
+	// Device Tracking Fields for Time Out
+	@Column({
+		type: DataType.ENUM("Inside", "In-field", "Outside"),
+		allowNull: true,
+	})
+	declare timeOutLocationType: "Inside" | "In-field" | "Outside";
+
+	@Column({
+		type: DataType.ENUM("Mobile", "Desktop", "Tablet"),
+		allowNull: true,
+	})
+	declare timeOutDeviceType: "Mobile" | "Desktop" | "Tablet";
+
+	@Column({ type: DataType.STRING, allowNull: true })
+	declare timeOutDeviceUnit: string;
+
+	@Column({ type: DataType.STRING, allowNull: true })
+	declare timeOutMacAddress: string;
+
+	@Column({
+		type: DataType.ENUM("Normal", "Early Departure", "Overtime"),
+		allowNull: true,
+	})
+	declare timeOutRemarks: "Normal" | "Early Departure" | "Overtime";
+
+	@Column({ type: DataType.TEXT, allowNull: true })
+	declare timeOutExactLocation: string;
+
+	// Photo Fields
+	@Column({ type: DataType.STRING, allowNull: true })
+	declare photoIn: string;
+
+	@Column({ type: DataType.STRING, allowNull: true })
+	declare photoOut: string;
+
+	// Approval Workflow Fields
+	@Column({
+		type: DataType.ENUM("Pending", "Approved", "Declined"),
+		allowNull: false,
+		defaultValue: "Pending",
+	})
+	declare approvalStatus: "Pending" | "Approved" | "Declined";
+
+	@ForeignKey(() => User)
+	@Column({ type: DataType.UUID, allowNull: true })
+	declare approvedBy: string;
+
+	@Column({ type: DataType.DATE, allowNull: true })
+	declare approvedAt: Date;
+
+	@Column({ type: DataType.TEXT, allowNull: true })
+	declare approvalNotes: string;
+
 	@CreatedAt
 	declare createdAt: Date;
 
@@ -82,6 +201,9 @@ export default class AttendanceRecord extends Model {
 
 	@BelongsTo(() => Practicum, "practicumId")
 	declare practicum: Practicum;
+
+	@BelongsTo(() => User, "approvedBy")
+	declare approver: User;
 
 	@HasOne(() => DetailedAttendanceLog, "attendanceRecordId")
 	declare detailedLog: DetailedAttendanceLog;
