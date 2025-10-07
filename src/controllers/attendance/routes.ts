@@ -1,11 +1,12 @@
 import { Router } from "express";
-import { isAuthenticated } from "@/middlewares/auth";
+import { isAuthenticated, authorizeRoles } from "@/middlewares/auth";
 import upload from "@/utils/uploader";
 import {
 	clockInController,
 	clockOutController,
 	getAttendanceController,
 	listAttendanceController,
+	listInstructorAttendanceController,
 	getStudentAttendanceController,
 	getAttendanceStatsController,
 	getTodayAttendanceController,
@@ -15,6 +16,14 @@ const router = Router();
 
 // List attendance records
 router.get("/attendance", isAuthenticated, listAttendanceController);
+
+// List attendance scoped to instructor
+router.get(
+	"/instructor/attendance",
+	isAuthenticated,
+	authorizeRoles("instructor"),
+	listInstructorAttendanceController
+);
 
 // Student-specific attendance endpoints (must come before /attendance/:id)
 router.get("/attendance/student/:studentId", isAuthenticated, getStudentAttendanceController);

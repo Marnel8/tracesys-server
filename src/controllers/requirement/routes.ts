@@ -1,11 +1,12 @@
 import { Router } from "express";
-import { isAuthenticated } from "@/middlewares/auth";
+import { isAuthenticated, authorizeRoles } from "@/middlewares/auth";
 import upload from "@/utils/uploader";
 import {
 	approveRequirementController,
 	createRequirementFromTemplateController,
 	getRequirementController,
 	getRequirementsController,
+	getInstructorRequirementsController,
 	rejectRequirementController,
 	submitRequirementController,
 	getRequirementStatsController,
@@ -22,6 +23,14 @@ router.post(
 
 // List requirements
 router.get("/requirements", isAuthenticated, getRequirementsController);
+
+// List requirements scoped to instructor
+router.get(
+	"/instructor/requirements",
+	isAuthenticated,
+	authorizeRoles("instructor"),
+	getInstructorRequirementsController
+);
 
 // Get single requirement
 router.get("/requirements/:id", isAuthenticated, getRequirementController);

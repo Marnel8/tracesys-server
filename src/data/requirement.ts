@@ -26,6 +26,7 @@ interface GetRequirementsParams {
 	status?: RequirementStatus | "all";
 	studentId?: string;
 	practicumId?: string;
+	instructorId?: string;
 }
 
 export const createRequirementFromTemplateData = async (
@@ -52,7 +53,7 @@ export const createRequirementFromTemplateData = async (
 };
 
 export const getRequirementsData = async (params: GetRequirementsParams) => {
-	const { page, limit, search, status, studentId, practicumId } = params;
+	const { page, limit, search, status, studentId, practicumId, instructorId } = params;
 	const offset = (page - 1) * limit;
 
 	const where: any = {};
@@ -77,22 +78,28 @@ export const getRequirementsData = async (params: GetRequirementsParams) => {
 		limit,
 		offset,
 		order: [["createdAt", "DESC"]],
+		subQuery: false,
+		distinct: true,
 		include: [
 			{ model: RequirementTemplate, as: "template" as any },
 			{
 				model: User,
 				as: "student" as any,
-				attributes: ["id", "firstName", "lastName", "email", "role"],
+				attributes: ["id", "firstName", "lastName", "email", "role", "studentId"],
+				required: true,
 				include: [
 					{
 						model: StudentEnrollment,
 						as: "enrollments" as any,
-						attributes: ["id", "status"],
+						attributes: [],
+						required: !!instructorId,
 						include: [
 							{
 								model: Section,
 								as: "section" as any,
-								attributes: ["id", "name"],
+								attributes: [],
+								required: !!instructorId,
+								where: instructorId ? { instructorId } : undefined,
 							},
 						],
 					},

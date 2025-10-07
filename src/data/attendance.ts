@@ -3,6 +3,8 @@ import AttendanceRecord from "@/db/models/attendance-record";
 import User from "@/db/models/user";
 import Practicum from "@/db/models/practicum";
 import Agency from "@/db/models/agency";
+import StudentEnrollment from "@/db/models/student-enrollment";
+import Section from "@/db/models/section";
 
 export type AttendanceApprovalStatus = "Pending" | "Approved" | "Declined";
 
@@ -20,10 +22,11 @@ interface ListAttendanceParams extends Pagination {
 	date?: string; // YYYY-MM-DD
 	startDate?: string; // YYYY-MM-DD
 	endDate?: string; // YYYY-MM-DD
+	instructorId?: string;
 }
 
 export const getAttendanceListData = async (params: ListAttendanceParams) => {
-	const { page, limit, search, status, approvalStatus, studentId, practicumId, date, startDate, endDate } = params;
+	const { page, limit, search, status, approvalStatus, studentId, practicumId, date, startDate, endDate, instructorId } = params;
 	const offset = (page - 1) * limit;
 
 	const where: any = {};
@@ -60,13 +63,39 @@ export const getAttendanceListData = async (params: ListAttendanceParams) => {
 		where.date = dateFilter;
 	}
 
+	// instructor scoping handled via include-level where below
+
 	const { count, rows } = await AttendanceRecord.findAndCountAll({
 		where,
 		limit,
 		offset,
 		order: [["createdAt", "DESC"]],
+		subQuery: false,
+		distinct: true,
 		include: [
-			{ model: User, as: "student" as any, attributes: ["id", "firstName", "lastName", "email", "studentId"] },
+			{ 
+				model: User, 
+				as: "student" as any, 
+				attributes: ["id", "firstName", "lastName", "email", "studentId"],
+				required: true,
+				include: [
+					{
+						model: StudentEnrollment,
+						as: "enrollments" as any,
+					attributes: [],
+						required: !!instructorId,
+						include: [
+							{
+								model: Section,
+								as: "section" as any,
+								attributes: [],
+								required: !!instructorId,
+								where: instructorId ? { instructorId } : undefined,
+							},
+						],
+					},
+				],
+			},
 			{ 
 				model: Practicum, 
 				as: "practicum" as any,

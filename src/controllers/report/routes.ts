@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { isAuthenticated } from "@/middlewares/auth";
+import { isAuthenticated, authorizeRoles } from "@/middlewares/auth";
 import upload from "@/utils/uploader";
 import {
 	approveReportController,
@@ -7,6 +7,7 @@ import {
 	createReportFromTemplateController,
 	getReportController,
 	getReportsController,
+	getInstructorReportsController,
 	rejectReportController,
 	submitReportController,
 	getReportStatsController,
@@ -32,6 +33,14 @@ router.post(
 
 // List reports
 router.get("/reports", isAuthenticated, getReportsController);
+
+// List reports scoped to instructor
+router.get(
+	"/instructor/reports",
+	isAuthenticated,
+	authorizeRoles("instructor"),
+	getInstructorReportsController
+);
 
 // Narrative reports (convenience endpoints)
 router.post(

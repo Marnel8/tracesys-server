@@ -47,8 +47,26 @@ export const getRequirementsController = async (req: Request, res: Response) => 
 		status: status || "all",
 		studentId: studentId || undefined,
 		practicumId: practicumId || undefined,
+		instructorId: req.user?.role === "instructor" ? req.user.id : undefined,
 	});
 	res.status(StatusCodes.OK).json({ success: true, message: "Requirements retrieved", data: result });
+};
+
+export const getInstructorRequirementsController = async (req: Request, res: Response) => {
+	const { page = 1, limit = 10, search = "", status = "all", studentId, practicumId } =
+		req.query as any;
+	const result = await getRequirementsData({
+		page: Number(page),
+		limit: Number(limit),
+		search: search || "",
+		status: status || "all",
+		studentId: studentId || undefined,
+		practicumId: practicumId || undefined,
+		instructorId: req.user?.id,
+	});
+	res
+		.status(StatusCodes.OK)
+		.json({ success: true, message: "Instructor requirements retrieved", data: result });
 };
 
 export const getRequirementController = async (req: Request, res: Response) => {

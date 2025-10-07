@@ -58,11 +58,41 @@ export const getReportsController = async (req: Request, res: Response) => {
 		studentId: studentId || undefined,
 		practicumId: practicumId || undefined,
 		weekNumber: typeof weekNumber !== "undefined" ? Number(weekNumber) : undefined,
+		instructorId: req.user?.role === "instructor" ? req.user.id : undefined,
 	});
 
 	res
 		.status(StatusCodes.OK)
 		.json({ success: true, message: "Reports retrieved", data: result });
+};
+
+export const getInstructorReportsController = async (req: Request, res: Response) => {
+	const {
+		page = 1,
+		limit = 10,
+		search = "",
+		status = "all",
+		type = "all",
+		studentId,
+		practicumId,
+		weekNumber,
+	} = req.query as any;
+
+	const result = await getReportsData({
+		page: Number(page),
+		limit: Number(limit),
+		search: search || "",
+		status: status || "all",
+		type: type || "all",
+		studentId: studentId || undefined,
+		practicumId: practicumId || undefined,
+		weekNumber: typeof weekNumber !== "undefined" ? Number(weekNumber) : undefined,
+		instructorId: req.user?.id,
+	});
+
+	res
+		.status(StatusCodes.OK)
+		.json({ success: true, message: "Instructor reports retrieved", data: result });
 };
 
 export const getReportController = async (req: Request, res: Response) => {
@@ -175,15 +205,16 @@ export const createNarrativeReportController = async (req: Request, res: Respons
 };
 
 export const listNarrativeReportsController = async (req: Request, res: Response) => {
-	const { page = 1, limit = 10, search = "", status = "all", studentId, practicumId } = req.query as any;
-	const result = await getNarrativeReportsData({
-		page: Number(page),
-		limit: Number(limit),
-		search: search || "",
-		status: status || "all",
-		studentId: studentId || undefined,
-		practicumId: practicumId || undefined,
-	});
+    const { page = 1, limit = 10, search = "", status = "all", studentId, practicumId } = req.query as any;
+    const result = await getNarrativeReportsData({
+        page: Number(page),
+        limit: Number(limit),
+        search: search || "",
+        status: status || "all",
+        studentId: studentId || undefined,
+        practicumId: practicumId || undefined,
+        instructorId: req.user?.role === "instructor" ? req.user.id : undefined,
+    });
 	res.status(StatusCodes.OK).json({ success: true, message: "Narrative reports retrieved", data: result });
 };
 

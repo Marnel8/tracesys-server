@@ -33,11 +33,45 @@ export const listAttendanceController = async (req: Request, res: Response) => {
 		date: date || undefined,
 		startDate: startDate || undefined,
 		endDate: endDate || undefined,
+		instructorId: req.user?.role === "instructor" ? req.user.id : undefined,
 	});
 
 	res
 		.status(StatusCodes.OK)
 		.json({ success: true, message: "Attendance records retrieved", data: result });
+};
+
+export const listInstructorAttendanceController = async (req: Request, res: Response) => {
+	const {
+		page = 1,
+		limit = 10,
+		search = "",
+		status = "all",
+		approvalStatus = "all",
+		studentId,
+		practicumId,
+		date,
+		startDate,
+		endDate,
+	} = req.query as any;
+
+	const result = await getAttendanceListData({
+		page: Number(page),
+		limit: Number(limit),
+		search: search || "",
+		status: status || "all",
+		approvalStatus: approvalStatus || "all",
+		studentId: studentId || undefined,
+		practicumId: practicumId || undefined,
+		date: date || undefined,
+		startDate: startDate || undefined,
+		endDate: endDate || undefined,
+		instructorId: req.user?.id,
+	});
+
+	res
+		.status(StatusCodes.OK)
+		.json({ success: true, message: "Instructor attendance retrieved", data: result });
 };
 
 export const getAttendanceController = async (req: Request, res: Response) => {

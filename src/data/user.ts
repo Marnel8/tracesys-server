@@ -19,6 +19,34 @@ export const createUserData = async (userData: CreateUserParams) => {
 	const avatar = userData?.avatar || "";
 	
 	try {
+        // Uniqueness pre-checks to provide clear errors before attempting insert
+        // Check email uniqueness
+        if (userData.email) {
+            const existingByEmail = await User.findOne({ where: { email: userData.email }, transaction: t });
+            if (existingByEmail) {
+                await t.rollback();
+                throw new ConflictError("Email already exists.");
+            }
+        }
+
+        // Check studentId uniqueness if provided
+        if (userData.studentId) {
+            const existingByStudentId = await User.findOne({ where: { studentId: userData.studentId }, transaction: t });
+            if (existingByStudentId) {
+                await t.rollback();
+                throw new ConflictError("Student ID already exists.");
+            }
+        }
+
+        // Check instructorId uniqueness if provided
+        if (userData.instructorId) {
+            const existingByInstructorId = await User.findOne({ where: { instructorId: userData.instructorId }, transaction: t });
+            if (existingByInstructorId) {
+                await t.rollback();
+                throw new ConflictError("Instructor ID already exists.");
+            }
+        }
+
 		const user = await User.create(
 			{
 				firstName: userData.firstName,
@@ -44,9 +72,9 @@ export const createUserData = async (userData: CreateUserParams) => {
 			throw new ConflictError("Failed to create user.");
 		}
 
-		await t.commit();
-		return user;
-	} catch (error) {
+        await t.commit();
+        return user;
+    } catch (error: any) {
 		await t.rollback();
 		
 		// If user creation failed and we have an avatar, clean it up from Cloudinary
@@ -61,8 +89,25 @@ export const createUserData = async (userData: CreateUserParams) => {
 				// Don't throw here as the main error is more important
 			}
 		}
-		
-		throw error;
+        
+        // Normalize unique constraint errors into domain-specific ConflictError
+        if (error?.name === "SequelizeUniqueConstraintError") {
+            const fields = (error as any).fields || {};
+            const message = ((): string => {
+                if (fields.email) return "Email already exists.";
+                if (fields.studentId) return "Student ID already exists.";
+                if (fields.instructorId) return "Instructor ID already exists.";
+                // Fallback by inspecting message string
+                const raw = String(error.message || "").toLowerCase();
+                if (raw.includes("email")) return "Email already exists.";
+                if (raw.includes("student")) return "Student ID already exists.";
+                if (raw.includes("instructor")) return "Instructor ID already exists.";
+                return "Duplicate value violates a unique constraint.";
+            })();
+            throw new ConflictError(message);
+        }
+
+        throw error;
 	}
 };
 

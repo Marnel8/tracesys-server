@@ -3,6 +3,8 @@ import Report from "@/db/models/report";
 import ReportTemplate from "@/db/models/report-template";
 import User from "@/db/models/user";
 import Practicum from "@/db/models/practicum";
+import StudentEnrollment from "@/db/models/student-enrollment";
+import Section from "@/db/models/section";
 
 export type ReportType = "weekly" | "monthly" | "final" | "narrative";
 export type ReportStatus = "draft" | "submitted" | "approved" | "rejected";
@@ -23,6 +25,7 @@ interface GetReportsParams {
 	studentId?: string;
 	practicumId?: string;
 	weekNumber?: number;
+	instructorId?: string;
 }
 
 export const createReportFromTemplateData = async (
@@ -90,7 +93,7 @@ export const createNarrativeReportData = async (params: {
 };
 
 export const getReportsData = async (params: GetReportsParams) => {
-	const { page, limit, search, status, type, studentId, practicumId, weekNumber } = params;
+	const { page, limit, search, status, type, studentId, practicumId, weekNumber, instructorId } = params;
 	const offset = (page - 1) * limit;
 
 	const where: any = {};
@@ -121,9 +124,33 @@ export const getReportsData = async (params: GetReportsParams) => {
 		limit,
 		offset,
 		order: [["createdAt", "DESC"]],
+		subQuery: false,
+		distinct: true,
 		include: [
 			{ model: ReportTemplate, as: "template" as any },
-			{ model: User, as: "student" as any, attributes: ["id", "firstName", "lastName", "email", "role"] },
+			{ 
+				model: User, 
+				as: "student" as any, 
+				attributes: ["id", "firstName", "lastName", "email", "role", "studentId"],
+				required: true,
+				include: [
+					{
+						model: StudentEnrollment,
+						as: "enrollments" as any,
+						attributes: [],
+						required: !!instructorId,
+						include: [
+							{
+								model: Section,
+								as: "section" as any,
+								attributes: [],
+								required: !!instructorId,
+								where: instructorId ? { instructorId } : undefined,
+							},
+						],
+					},
+				],
+			},
 			{ model: User, as: "approver" as any, attributes: ["id", "firstName", "lastName", "email", "role"] },
 			{ model: Practicum, as: "practicum" as any },
 		],
