@@ -535,6 +535,7 @@ export const getStudentsData = async (params: {
 
 	const whereClause: any = {
 		role: UserRole.STUDENT,
+		isActive: true, // Only include active students
 	};
 
 	if (search) {
@@ -780,18 +781,24 @@ export const updateStudentData = async (id: string, studentData: UpdateStudentPa
 export const deleteStudentData = async (id: string) => {
 	const t = await sequelize.transaction();
 
-	const student = await User.findByPk(id);
-	if (!student) {
+	try {
+		const student = await User.findByPk(id);
+		
+		if (!student) {
+			await t.rollback();
+			throw new NotFoundError("Student not found.");
+		}
+
+		// Soft delete by setting isActive to false
+		await student.update({ isActive: false }, { transaction: t });
+
+		await t.commit();
+
+		return student;
+	} catch (error) {
 		await t.rollback();
-		throw new NotFoundError("Student not found.");
+		throw error;
 	}
-
-	// Soft delete by setting isActive to false
-	await student.update({ isActive: false }, { transaction: t });
-
-	await t.commit();
-
-	return student;
 };
 
 export const getStudentsByTeacherData = async (params: {
@@ -814,6 +821,7 @@ export const getStudentsByTeacherData = async (params: {
 
 	const whereClause: any = {
 		role: UserRole.STUDENT,
+		isActive: true, // Only include active students
 	};
 
 	if (search) {
