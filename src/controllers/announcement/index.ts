@@ -105,6 +105,31 @@ export const getAnnouncementsController = async (req: Request, res: Response) =>
 	});
 };
 
+// Public controller for published announcements (no authentication required)
+export const getPublicAnnouncementsController = async (req: Request, res: Response) => {
+	const { 
+		page = 1, 
+		limit = 10, 
+		search = "", 
+		priority = "all"
+	} = req.query;
+
+	// Only allow fetching published announcements for public access
+	const result = await getAnnouncementsData({
+		page: Number(page),
+		limit: Number(limit),
+		search: search as string,
+		status: "Published", // Force status to Published for public access
+		priority: priority as string,
+	});
+
+	res.status(StatusCodes.OK).json({
+		success: true,
+		message: "Public announcements retrieved successfully",
+		data: result,
+	});
+};
+
 export const getAnnouncementController = async (req: Request, res: Response) => {
 	const { id } = req.params;
 

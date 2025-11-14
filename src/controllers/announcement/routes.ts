@@ -2,6 +2,7 @@ import { Router } from "express";
 import {
 	createAnnouncementController,
 	getAnnouncementsController,
+	getPublicAnnouncementsController,
 	getAnnouncementController,
 	updateAnnouncementController,
 	deleteAnnouncementController,
@@ -16,6 +17,9 @@ import { isAuthenticated } from "@/middlewares/auth";
 const router = Router();
 
 // Announcement Management Routes
+
+// Public route for published announcements (no authentication required)
+router.get("/announcement/public", getPublicAnnouncementsController);
 
 // Create new announcement
 router.post("/announcement/", isAuthenticated, createAnnouncementController);
