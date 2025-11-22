@@ -15,6 +15,7 @@ import {
 } from "@/data/report";
 import { createReportData, createNarrativeReportData, getNarrativeReportsData } from "@/data/report";
 import { validateImageFile } from "@/utils/image-uploader";
+import { logStudentAction } from "@/utils/audit-logger";
 
 export const createReportFromTemplateController = async (
 	req: Request,
@@ -47,6 +48,8 @@ export const getReportsController = async (req: Request, res: Response) => {
 		studentId,
 		practicumId,
 		weekNumber,
+		startDate,
+		endDate,
 	} = req.query as any;
 
 	const result = await getReportsData({
@@ -58,6 +61,8 @@ export const getReportsController = async (req: Request, res: Response) => {
 		studentId: studentId || undefined,
 		practicumId: practicumId || undefined,
 		weekNumber: typeof weekNumber !== "undefined" ? Number(weekNumber) : undefined,
+		startDate: startDate ? new Date(startDate as string) : undefined,
+		endDate: endDate ? new Date(endDate as string) : undefined,
 		instructorId: req.user?.role === "instructor" ? req.user.id : undefined,
 	});
 
@@ -76,6 +81,8 @@ export const getInstructorReportsController = async (req: Request, res: Response
 		studentId,
 		practicumId,
 		weekNumber,
+		startDate,
+		endDate,
 	} = req.query as any;
 
 	const result = await getReportsData({
@@ -87,6 +94,8 @@ export const getInstructorReportsController = async (req: Request, res: Response
 		studentId: studentId || undefined,
 		practicumId: practicumId || undefined,
 		weekNumber: typeof weekNumber !== "undefined" ? Number(weekNumber) : undefined,
+		startDate: startDate ? new Date(startDate as string) : undefined,
+		endDate: endDate ? new Date(endDate as string) : undefined,
 		instructorId: req.user?.id,
 	});
 
@@ -106,12 +115,28 @@ export const getReportController = async (req: Request, res: Response) => {
 export const createReportController = async (req: Request, res: Response) => {
 	const studentId = req.user?.id;
 	if (!studentId) throw new BadRequestError("Missing authenticated user context");
-	const { title, content = "", type, weekNumber = null, practicumId = null, dueDate = null } = req.body || {};
+	const { title, content = "", type, weekNumber = null, startDate = null, endDate = null, practicumId = null, dueDate = null } = req.body || {};
 	if (!title?.trim()) throw new BadRequestError("Title is required");
 	if (!type || !["weekly", "monthly", "final", "narrative"].includes(type)) {
 		throw new BadRequestError("Invalid or missing report type");
 	}
+	
+	// Validate date range if provided
+	if (startDate && endDate) {
+		const start = new Date(startDate as string);
+		const end = new Date(endDate as string);
+		if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+			throw new BadRequestError("Invalid date format for startDate or endDate");
+		}
+		if (start > end) {
+			throw new BadRequestError("startDate must be before or equal to endDate");
+		}
+	} else if (startDate || endDate) {
+		throw new BadRequestError("Both startDate and endDate must be provided together");
+	}
+	
 	// weekNumber is optional even for weekly reports to keep submission simple
+	// startDate and endDate are new fields for date range selection
 	const report = await createReportData({
 		studentId,
 		practicumId,
@@ -119,6 +144,8 @@ export const createReportController = async (req: Request, res: Response) => {
 		content,
 		type,
 		weekNumber,
+		startDate: startDate ? new Date(startDate as string) : null,
+		endDate: endDate ? new Date(endDate as string) : null,
 		dueDate,
 	});
 	res.status(StatusCodes.CREATED).json({ success: true, message: "Report created", data: report });
@@ -201,6 +228,22 @@ export const createNarrativeReportController = async (req: Request, res: Respons
 		} as any);
 	}
 
+	// Log audit event
+	await logStudentAction(req, {
+		action: "Narrative Report Submitted",
+		resource: "Reports",
+		resourceId: updated.id,
+		details: `Student submitted narrative report: ${updated.title || "Untitled"}`,
+		category: "submission",
+		severity: "low",
+		status: "success",
+		metadata: {
+			reportId: updated.id,
+			reportType: "narrative",
+			hasFile: !!file,
+		},
+	});
+
 	res.status(StatusCodes.CREATED).json({ success: true, message: "Narrative report created", data: updated });
 };
 
@@ -262,6 +305,8 @@ export const submitReportController = async (req: Request, res: Response) => {
 		title,
 		content,
 		weekNumber,
+		startDate,
+		endDate,
 		hoursLogged,
 		activities,
 		learnings,
@@ -272,11 +317,31 @@ export const submitReportController = async (req: Request, res: Response) => {
 		throw new BadRequestError("Provide content or a file to submit the report");
 	}
 
+	// Validate date range if provided
+	let parsedStartDate: Date | undefined = undefined;
+	let parsedEndDate: Date | undefined = undefined;
+	
+	if (startDate || endDate) {
+		if (!startDate || !endDate) {
+			throw new BadRequestError("Both startDate and endDate must be provided together");
+		}
+		parsedStartDate = new Date(startDate as string);
+		parsedEndDate = new Date(endDate as string);
+		if (isNaN(parsedStartDate.getTime()) || isNaN(parsedEndDate.getTime())) {
+			throw new BadRequestError("Invalid date format for startDate or endDate");
+		}
+		if (parsedStartDate > parsedEndDate) {
+			throw new BadRequestError("startDate must be before or equal to endDate");
+		}
+	}
+
 	const updated = await updateReportSubmissionData(id, {
 		title,
 		content,
 		fileUrl,
 		weekNumber: typeof weekNumber !== "undefined" ? Number(weekNumber) : undefined as any,
+		startDate: parsedStartDate,
+		endDate: parsedEndDate,
 		hoursLogged: typeof hoursLogged !== "undefined" ? Number(hoursLogged) : undefined as any,
 		activities,
 		learnings,
@@ -298,6 +363,22 @@ export const submitReportController = async (req: Request, res: Response) => {
 		} as any);
 	}
 
+	// Log audit event
+	await logStudentAction(req, {
+		action: "Report Submitted",
+		resource: "Reports",
+		resourceId: updated.id,
+		details: `Student submitted ${updated.type || "report"}: ${updated.title || "Untitled"}`,
+		category: "submission",
+		severity: "low",
+		status: "success",
+		metadata: {
+			reportId: updated.id,
+			reportType: updated.type,
+			hasFile: !!file,
+		},
+	});
+
 	res
 		.status(StatusCodes.OK)
 		.json({ success: true, message: "Report submitted", data: updated });
@@ -310,6 +391,24 @@ export const approveReportController = async (req: Request, res: Response) => {
 	if (!approverId) throw new BadRequestError("Missing authenticated user context");
 	const { feedback = null, rating = null } = req.body || {};
 	const result = await approveReportData(id, approverId, feedback, rating);
+	
+	// Log audit event
+	await logStudentAction(req, {
+		action: "Report Approved",
+		resource: "Reports",
+		resourceId: id,
+		details: `Instructor approved report${feedback ? ` with feedback` : ""}${rating ? ` (Rating: ${rating})` : ""}`,
+		category: "submission",
+		severity: "medium",
+		status: "success",
+		metadata: {
+			reportId: id,
+			approverId,
+			hasFeedback: !!feedback,
+			rating,
+		},
+	});
+	
 	res
 		.status(StatusCodes.OK)
 		.json({ success: true, message: "Report approved", data: result });
@@ -323,6 +422,23 @@ export const rejectReportController = async (req: Request, res: Response) => {
 	const { reason } = req.body || {};
 	if (!reason?.trim()) throw new BadRequestError("Rejection reason is required");
 	const result = await rejectReportData(id, approverId, reason);
+	
+	// Log audit event
+	await logStudentAction(req, {
+		action: "Report Rejected",
+		resource: "Reports",
+		resourceId: id,
+		details: `Instructor rejected report: ${reason}`,
+		category: "submission",
+		severity: "medium",
+		status: "warning",
+		metadata: {
+			reportId: id,
+			approverId,
+			rejectionReason: reason,
+		},
+	});
+	
 	res
 		.status(StatusCodes.OK)
 		.json({ success: true, message: "Report rejected", data: result });

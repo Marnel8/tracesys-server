@@ -1,6 +1,7 @@
 import { Op, fn, col } from "sequelize";
 import AuditLog from "@/db/models/audit-log";
 import User from "@/db/models/user";
+import { getInstructorStudentIds } from "@/utils/instructor";
 
 export interface CreateAuditLogParams {
 	userId?: string;
@@ -30,6 +31,7 @@ export interface GetAuditLogsParams {
 	userId?: string;
 	startDate?: string;
 	endDate?: string;
+	instructorId?: string;
 }
 
 export interface AuditLogResponse {
@@ -97,18 +99,43 @@ export const getAuditLogsData = async (params: GetAuditLogsParams = {}): Promise
 		userId,
 		startDate,
 		endDate,
+		instructorId,
 	} = params;
 
 	const offset = (page - 1) * limit;
 	const whereClause: any = {};
+	const andConditions: any[] = [];
+
+	// Instructor filter: only show logs from instructor's students or the instructor themselves
+	if (instructorId) {
+		const studentIds = await getInstructorStudentIds(instructorId);
+		// Handle empty array case - only show instructor's own logs if no students
+		if (studentIds.length === 0) {
+			andConditions.push({ userId: instructorId });
+		} else {
+			andConditions.push({
+				[Op.or]: [
+					{ userId: { [Op.in]: studentIds } },
+					{ userId: instructorId },
+				],
+			});
+		}
+	}
 
 	// Search filter
 	if (search) {
-		whereClause[Op.or] = [
-			{ action: { [Op.like]: `%${search}%` } },
-			{ resource: { [Op.like]: `%${search}%` } },
-			{ details: { [Op.like]: `%${search}%` } },
-		];
+		andConditions.push({
+			[Op.or]: [
+				{ action: { [Op.like]: `%${search}%` } },
+				{ resource: { [Op.like]: `%${search}%` } },
+				{ details: { [Op.like]: `%${search}%` } },
+			],
+		});
+	}
+
+	// Combine AND conditions
+	if (andConditions.length > 0) {
+		whereClause[Op.and] = andConditions;
 	}
 
 	// Category filter
@@ -126,21 +153,58 @@ export const getAuditLogsData = async (params: GetAuditLogsParams = {}): Promise
 		whereClause.status = status;
 	}
 
-	// User filter
+	// User filter (overrides instructor filter if specific user is selected)
 	if (userId && userId !== "all") {
+		// If instructor filter exists, ensure the user is one of their students
+		if (instructorId) {
+			const studentIds = await getInstructorStudentIds(instructorId);
+			if (!studentIds.includes(userId) && userId !== instructorId) {
+				// User is not under this instructor, return empty result
+				return {
+					auditLogs: [],
+					pagination: {
+						total: 0,
+						page: Number(page),
+						limit: Number(limit),
+						totalPages: 0,
+					},
+				};
+			}
+		}
+		// Simply set userId - it will override instructor filter naturally
 		whereClause.userId = userId;
+		// Remove instructor filter from AND conditions if it exists
+		if (whereClause[Op.and]) {
+			whereClause[Op.and] = whereClause[Op.and].filter((cond: any) => 
+				!cond[Op.or] || !cond[Op.or].some((c: any) => 
+					c.userId && (c.userId[Op.in] || c.userId === instructorId)
+				)
+			);
+			// If no conditions left, remove Op.and
+			if (whereClause[Op.and].length === 0) {
+				delete whereClause[Op.and];
+			}
+		}
 	}
 
-	// Date range filter - temporarily disabled until createdAt column is added
-	// if (startDate || endDate) {
-	// 	whereClause.createdAt = {};
-	// 	if (startDate) {
-	// 		whereClause.createdAt[Op.gte] = new Date(startDate);
-	// 	}
-	// 	if (endDate) {
-	// 		whereClause.createdAt[Op.lte] = new Date(endDate);
-	// 	}
-	// }
+	// Date range filter
+	if (startDate || endDate) {
+		const dateCondition: any = {};
+		if (startDate) {
+			dateCondition[Op.gte] = new Date(startDate);
+		}
+		if (endDate) {
+			dateCondition[Op.lte] = new Date(endDate);
+		}
+		if (Object.keys(dateCondition).length > 0) {
+			// Add to existing AND conditions or create new array
+			if (whereClause[Op.and]) {
+				whereClause[Op.and].push({ createdAt: dateCondition });
+			} else {
+				whereClause[Op.and] = [{ createdAt: dateCondition }];
+			}
+		}
+	}
 
 	const { count, rows } = await AuditLog.findAndCountAll({
 		where: whereClause,
@@ -151,7 +215,7 @@ export const getAuditLogsData = async (params: GetAuditLogsParams = {}): Promise
 				attributes: ["id", "firstName", "lastName", "email", "role"],
 			},
 		],
-		// order: [["createdAt", "DESC"]], // Temporarily disabled until createdAt column is added
+		order: [["createdAt", "DESC"]],
 		limit: Number(limit),
 		offset: Number(offset),
 	});
@@ -192,37 +256,53 @@ export const findAuditLogById = async (id: string) => {
 /**
  * Get audit statistics
  */
-export const getAuditStatsData = async (): Promise<AuditStatsResponse> => {
+export const getAuditStatsData = async (instructorId?: string): Promise<AuditStatsResponse> => {
 	try {
 		const now = new Date();
 		const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
+		// Build where clause for instructor filtering
+		let whereClause: any = {};
+		if (instructorId) {
+			const studentIds = await getInstructorStudentIds(instructorId);
+			// Handle empty array case - only show instructor's own logs if no students
+			if (studentIds.length === 0) {
+				whereClause.userId = instructorId;
+			} else {
+				whereClause[Op.or] = [
+					{ userId: { [Op.in]: studentIds } },
+					{ userId: instructorId },
+				];
+			}
+		}
+
 		// Total activities
-		const totalActivities = await AuditLog.count();
+		const totalActivities = await AuditLog.count({ where: whereClause });
 
 		// Security events
 		const securityEvents = await AuditLog.count({
-			where: { category: "security" },
+			where: { ...whereClause, category: "security" },
 		});
 
 		// Failed actions
 		const failedActions = await AuditLog.count({
-			where: { status: "failed" },
+			where: { ...whereClause, status: "failed" },
 		});
 
-		// Active users (last 30 days) - temporarily disabled until createdAt column is added
-		// const activeUsers = await AuditLog.count({
-		// 	where: {
-		// 		createdAt: { [Op.gte]: thirtyDaysAgo },
-		// 		userId: { [Op.ne]: null },
-		// 	},
-		// 	distinct: true,
-		// 	col: "userId",
-		// });
-		const activeUsers = 0; // Temporary fallback
+		// Active users (last 30 days)
+		const activeUsers = await AuditLog.count({
+			where: {
+				...whereClause,
+				createdAt: { [Op.gte]: thirtyDaysAgo },
+				userId: { [Op.ne]: null },
+			},
+			distinct: true,
+			col: "userId",
+		});
 
 		// Activities by category
 		const activitiesByCategory = await AuditLog.findAll({
+			where: whereClause,
 			attributes: [
 				"category",
 				[fn("COUNT", col("id")), "count"],
@@ -233,6 +313,7 @@ export const getAuditStatsData = async (): Promise<AuditStatsResponse> => {
 
 		// Activities by severity
 		const activitiesBySeverity = await AuditLog.findAll({
+			where: whereClause,
 			attributes: [
 				"severity",
 				[fn("COUNT", col("id")), "count"],
@@ -243,6 +324,7 @@ export const getAuditStatsData = async (): Promise<AuditStatsResponse> => {
 
 		// Activities by status
 		const activitiesByStatus = await AuditLog.findAll({
+			where: whereClause,
 			attributes: [
 				"status",
 				[fn("COUNT", col("id")), "count"],
@@ -251,8 +333,9 @@ export const getAuditStatsData = async (): Promise<AuditStatsResponse> => {
 			raw: true,
 		});
 
-		// Recent activities (last 10) - temporarily disabled until createdAt column is added
+		// Recent activities (last 10)
 		const recentActivities = await AuditLog.findAll({
+			where: whereClause,
 			include: [
 				{
 					model: User,
@@ -260,7 +343,7 @@ export const getAuditStatsData = async (): Promise<AuditStatsResponse> => {
 					attributes: ["id", "firstName", "lastName", "email", "role"],
 				},
 			],
-			// order: [["createdAt", "DESC"]], // Temporarily disabled until createdAt column is added
+			order: [["createdAt", "DESC"]],
 			limit: 10,
 		});
 
@@ -304,15 +387,13 @@ export const deleteOldAuditLogsData = async (daysOld: number = 90): Promise<numb
 		const cutoffDate = new Date();
 		cutoffDate.setDate(cutoffDate.getDate() - daysOld);
 
-		// Temporarily disabled until createdAt column is added
-		// const deletedCount = await AuditLog.destroy({
-		// 	where: {
-		// 		createdAt: {
-		// 			[Op.lt]: cutoffDate,
-		// 		},
-		// 	},
-		// });
-		const deletedCount = 0; // Temporary fallback
+		const deletedCount = await AuditLog.destroy({
+			where: {
+				createdAt: {
+					[Op.lt]: cutoffDate,
+				},
+			},
+		});
 
 		return deletedCount;
 	} catch (error) {
@@ -376,9 +457,24 @@ export const exportAuditLogsData = async (params: GetAuditLogsParams = {}) => {
 /**
  * Get users for audit log filtering
  */
-export const getAuditUsersData = async () => {
+export const getAuditUsersData = async (instructorId?: string) => {
 	try {
+		let whereClause: any = {};
+		
+		// If instructorId is provided, only return students under that instructor
+		if (instructorId) {
+			const studentIds = await getInstructorStudentIds(instructorId);
+			// Include the instructor themselves and their students
+			// Handle empty array case
+			if (studentIds.length === 0) {
+				whereClause.id = instructorId;
+			} else {
+				whereClause.id = { [Op.in]: [...studentIds, instructorId] };
+			}
+		}
+
 		const users = await User.findAll({
+			where: whereClause,
 			attributes: ["id", "firstName", "lastName", "email", "role"],
 			order: [["firstName", "ASC"]],
 		});

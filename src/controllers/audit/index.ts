@@ -102,6 +102,9 @@ export const getAuditLogsController = async (req: Request, res: Response) => {
 		endDate,
 	} = req.query;
 
+	// Extract instructorId if user is an instructor
+	const instructorId = req.user?.role === "instructor" ? req.user.id : undefined;
+
 	const result = await getAuditLogsData({
 		page: Number(page),
 		limit: Number(limit),
@@ -112,6 +115,7 @@ export const getAuditLogsController = async (req: Request, res: Response) => {
 		userId: userId as string,
 		startDate: startDate as string,
 		endDate: endDate as string,
+		instructorId,
 	});
 
 	res.status(StatusCodes.OK).json({
@@ -148,7 +152,9 @@ export const getAuditLogController = async (req: Request, res: Response) => {
  * Get audit statistics
  */
 export const getAuditStatsController = async (req: Request, res: Response) => {
-	const stats = await getAuditStatsData();
+	// Extract instructorId if user is an instructor
+	const instructorId = req.user?.role === "instructor" ? req.user.id : undefined;
+	const stats = await getAuditStatsData(instructorId);
 
 	res.status(StatusCodes.OK).json({
 		success: true,
@@ -161,7 +167,9 @@ export const getAuditStatsController = async (req: Request, res: Response) => {
  * Get users for audit filtering
  */
 export const getAuditUsersController = async (req: Request, res: Response) => {
-	const users = await getAuditUsersData();
+	// Extract instructorId if user is an instructor
+	const instructorId = req.user?.role === "instructor" ? req.user.id : undefined;
+	const users = await getAuditUsersData(instructorId);
 
 	res.status(StatusCodes.OK).json({
 		success: true,
@@ -184,6 +192,9 @@ export const exportAuditLogsController = async (req: Request, res: Response) => 
 		endDate,
 	} = req.query;
 
+	// Extract instructorId if user is an instructor
+	const instructorId = req.user?.role === "instructor" ? req.user.id : undefined;
+
 	const result = await exportAuditLogsData({
 		search: search as string,
 		category: category as string,
@@ -192,6 +203,7 @@ export const exportAuditLogsController = async (req: Request, res: Response) => 
 		userId: userId as string,
 		startDate: startDate as string,
 		endDate: endDate as string,
+		instructorId,
 	});
 
 	// Set headers for CSV download

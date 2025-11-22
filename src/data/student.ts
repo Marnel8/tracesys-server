@@ -136,6 +136,11 @@ export const findStudentByID = async (id: string) => {
 									},
 								],
 							},
+							{
+								model: User,
+								as: "instructor" as any,
+								attributes: ["id", "allowLoginWithoutRequirements"],
+							},
 						],
 					},
 				],
@@ -418,6 +423,104 @@ export const createStudentData = async (studentData: CreateStudentParams) => {
 				year: sectionRecord.year,
 				semester: sectionRecord.semester,
 			},
+		};
+	} catch (error) {
+		await t.rollback();
+		throw error;
+	}
+};
+
+interface CreateStudentFromOAuthParams {
+	email: string;
+	firstName: string;
+	lastName: string;
+	middleName?: string;
+	avatar?: string;
+	provider: string;
+	departmentId?: string;
+	sectionId: string;
+	program?: string;
+}
+
+export const createStudentFromOAuth = async (params: CreateStudentFromOAuthParams) => {
+	const t = await sequelize.transaction();
+
+	try {
+		// Check if user already exists
+		const existingUser = await User.findOne({
+			where: { email: params.email },
+			transaction: t,
+		});
+
+		if (existingUser) {
+			throw new ConflictError("User with this email already exists");
+		}
+
+		// Validate section exists
+		const sectionRecord = await Section.findByPk(params.sectionId, {
+			include: [Course],
+			transaction: t,
+		});
+
+		if (!sectionRecord) {
+			throw new NotFoundError("Section not found");
+		}
+
+		// Get department from section's course if not provided
+		let departmentId = params.departmentId;
+		if (!departmentId && sectionRecord.course) {
+			departmentId = sectionRecord.course.departmentId;
+		}
+
+		// Create user with minimal OAuth data
+		const user = await User.create(
+			{
+				firstName: params.firstName,
+				lastName: params.lastName,
+				middleName: params.middleName || null,
+				email: params.email,
+				password: null, // OAuth users don't have passwords
+				role: UserRole.STUDENT,
+				avatar: params.avatar || "",
+				provider: params.provider,
+				departmentId: departmentId || null,
+				program: params.program || null,
+				isActive: true,
+				emailVerified: true, // OAuth emails are verified
+				// age, phone, gender, studentId will be collected during onboarding
+			},
+			{ transaction: t }
+		);
+
+		// Create student enrollment immediately with sectionId from invitation
+		await StudentEnrollment.create(
+			{
+				studentId: user.id,
+				sectionId: params.sectionId,
+				enrollmentDate: new Date(),
+				status: "enrolled",
+			},
+			{ transaction: t }
+		);
+
+		// Create default requirements for the student
+		await createDefaultRequirements(user.id, t);
+
+		await t.commit();
+
+		return {
+			user: {
+				id: user.id,
+				firstName: user.firstName,
+				lastName: user.lastName,
+				email: user.email,
+				role: user.role,
+				provider: user.provider,
+				departmentId: user.departmentId,
+				sectionId: params.sectionId,
+				program: user.program,
+			},
+			needsOnboarding: !user.age || !user.phone || !user.gender || !user.studentId,
 		};
 	} catch (error) {
 		await t.rollback();

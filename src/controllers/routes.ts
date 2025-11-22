@@ -10,7 +10,9 @@ import requirementRoutes from "./requirement/routes";
 import attendanceRoutes from "./attendance/routes";
 import reportRoutes from "./report/routes";
 import auditRoutes from "./audit/routes";
+import invitationRoutes from "./invitation/routes";
+import practicumRoutes from "./practicum/routes";
 
-export const routes = [usersRoutes, studentRoutes, agencyRoutes, departmentRoutes, courseRoutes, sectionRoutes, announcementRoutes, requirementTemplateRoutes, requirementRoutes, attendanceRoutes, reportRoutes, auditRoutes] as const;
+export const routes = [usersRoutes, studentRoutes, agencyRoutes, departmentRoutes, courseRoutes, sectionRoutes, announcementRoutes, requirementTemplateRoutes, requirementRoutes, attendanceRoutes, reportRoutes, auditRoutes, invitationRoutes, practicumRoutes] as const;
 
 export type AppRoutes = (typeof routes)[number];

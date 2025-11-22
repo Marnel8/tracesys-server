@@ -5,7 +5,7 @@ import fs from "fs";
 import jwt, { JwtPayload } from "jsonwebtoken";
 import sendMail from "@/utils/send-mail";
 import { createActivationToken } from "@/services/user";
-import User from "@/db/models/user";
+import User, { UserRole } from "@/db/models/user";
 import { IActivationRequest, CreateUserParams } from "@/@types/user";
 import { StatusCodes } from "http-status-codes";
 import {
@@ -15,6 +15,10 @@ import {
 	UnauthorizedError,
 } from "@/utils/error";
 import { createUserData, findUserByID, login, updateUserData, changePasswordData } from "@/data/user";
+import StudentEnrollment from "@/db/models/student-enrollment";
+import Section from "@/db/models/section";
+import Requirement from "@/db/models/requirement";
+import { Op } from "sequelize";
 import {
 	accessTokenOptions,
 	refreshTokenOptions,
@@ -147,10 +151,75 @@ export const activateUserController = async (req: Request, res: Response) => {
 	res.status(StatusCodes.CREATED).json(user);
 };
 
+/**
+ * Helper function to check if student can login based on requirements.
+ * 
+ * This function:
+ * 1. Checks if any of the student's instructors have enabled the bypass setting
+ * 2. If no instructor allows bypass, verifies the student has at least one submitted/approved requirement
+ * 3. Throws UnauthorizedError if requirements are not met
+ * 
+ * @param studentId - The ID of the student to check
+ * @throws {UnauthorizedError} If student cannot login due to missing requirements
+ */
+const checkStudentLoginRequirements = async (studentId: string): Promise<void> => {
+	// Get student's enrollments to find their sections and instructors
+	const enrollments = await StudentEnrollment.findAll({
+		where: { studentId },
+		include: [
+			{
+				model: Section,
+				as: "section" as any,
+				required: false, // Left join to handle students without sections
+				include: [
+					{
+						model: User,
+						as: "instructor" as any,
+						attributes: ["id", "allowLoginWithoutRequirements"],
+						required: false, // Left join to handle sections without instructors
+					},
+				],
+			},
+		],
+	});
+
+	// Check if any instructor allows login without requirements
+	// Also handle case where student has no enrollments
+	const hasInstructorAllowingLogin =
+		enrollments.length > 0 &&
+		enrollments.some(
+			(enrollment: any) =>
+				enrollment.section?.instructor?.allowLoginWithoutRequirements === true
+		);
+
+	// If no instructor allows it, check if student has submitted requirements
+	if (!hasInstructorAllowingLogin) {
+		const submittedRequirements = await Requirement.count({
+			where: {
+				studentId,
+				status: {
+					[Op.in]: ["submitted", "approved"],
+				},
+			},
+		});
+
+		if (submittedRequirements === 0) {
+			throw new UnauthorizedError(
+				"You must submit at least one requirement before you can login. Please contact your instructor for assistance."
+			);
+		}
+	}
+};
+
 export const loginController = async (req: Request, res: Response) => {
 	const { email, password } = req.body;
 
 	const userResult = await login({ email, password });
+
+	// Check requirement login restriction for students (defense in depth)
+	if (userResult.role === UserRole.STUDENT) {
+		await checkStudentLoginRequirements(userResult.id);
+	}
 
 	sendToken(userResult, StatusCodes.OK, res);
 };
@@ -400,5 +469,43 @@ export const changePasswordController = async (req: Request, res: Response) => {
 	res.status(StatusCodes.OK).json({
 		success: true,
 		message: "Password changed successfully",
+	});
+};
+
+export const updateAllowLoginWithoutRequirementsController = async (req: Request, res: Response) => {
+	const { allowLoginWithoutRequirements } = req.body as {
+		allowLoginWithoutRequirements?: boolean;
+	};
+
+	if (typeof allowLoginWithoutRequirements !== "boolean") {
+		throw new BadRequestError("allowLoginWithoutRequirements must be a boolean");
+	}
+
+	// Get user ID from authenticated user (set by auth middleware)
+	const userId = req.user?.id;
+	if (!userId) {
+		throw new UnauthorizedError("User not authenticated");
+	}
+
+	const user = await findUserByID(userId);
+
+	// Verify user is an instructor
+	if (user.role !== UserRole.INSTRUCTOR) {
+		throw new UnauthorizedError("Only instructors can update this setting");
+	}
+
+	// Update the setting
+	user.allowLoginWithoutRequirements = allowLoginWithoutRequirements;
+	await user.save();
+
+	res.status(StatusCodes.OK).json({
+		success: true,
+		message: allowLoginWithoutRequirements
+			? "Students can now login without completing requirements"
+			: "Students must submit requirements before logging in",
+		user: {
+			id: user.id,
+			allowLoginWithoutRequirements: user.allowLoginWithoutRequirements,
+		},
 	});
 };

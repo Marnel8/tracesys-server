@@ -28,6 +28,12 @@ export default class DetailedAttendanceLog extends Model {
 	@Column({ type: DataType.UUID, allowNull: false })
 	declare attendanceRecordId: string;
 
+	@Column({
+		type: DataType.ENUM("morning", "afternoon"),
+		allowNull: true,
+	})
+	declare sessionType: "morning" | "afternoon";
+
 	@Column({ type: DataType.STRING, allowNull: true })
 	declare photoIn: string;
 

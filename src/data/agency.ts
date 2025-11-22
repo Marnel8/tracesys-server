@@ -2,6 +2,7 @@ import { Op } from "sequelize";
 import Agency from "@/db/models/agency";
 import Supervisor from "@/db/models/supervisor";
 import Practicum from "@/db/models/practicum";
+import User from "@/db/models/user";
 
 interface CreateAgencyParams {
 	name: string;
@@ -13,6 +14,9 @@ interface CreateAgencyParams {
 	branchType: "Main" | "Branch";
 	openingTime?: string;
 	closingTime?: string;
+	operatingDays?: string;
+	lunchStartTime?: string;
+	lunchEndTime?: string;
 	isActive?: boolean;
 	latitude?: number;
 	longitude?: number;
@@ -23,6 +27,7 @@ interface GetAgenciesParams {
 	limit: number;
 	search?: string;
 	status?: string;
+	branchType?: string;
 }
 
 interface CreateSupervisorParams {
@@ -68,7 +73,7 @@ export const createAgencyData = async (data: CreateAgencyParams) => {
 
 export const getAgenciesData = async (params: GetAgenciesParams) => {
 	try {
-		const { page, limit, search, status } = params;
+		const { page, limit, search, status, branchType } = params;
 		const offset = (page - 1) * limit;
 
 		// Build where clause
@@ -84,6 +89,10 @@ export const getAgenciesData = async (params: GetAgenciesParams) => {
 
 		if (status && status !== "all") {
 			whereClause.isActive = status === "active";
+		}
+
+		if (branchType && branchType !== "all") {
+			whereClause.branchType = branchType;
 		}
 
 		const { count, rows: agencies } = await Agency.findAndCountAll({
@@ -104,7 +113,15 @@ export const getAgenciesData = async (params: GetAgenciesParams) => {
 					as: "practicums",
 					where: { status: "active" },
 					required: false,
-					attributes: ["id", "status"],
+					attributes: ["id", "status", "position", "startDate", "endDate", "totalHours", "completedHours", "studentId"],
+					include: [
+						{
+							model: User,
+							as: "student",
+							required: false,
+							attributes: ["id", "firstName", "lastName", "studentId", "email"],
+						},
+					],
 				},
 			],
 		});
@@ -141,7 +158,15 @@ export const findAgencyByID = async (id: string) => {
 					as: "practicums",
 					where: { status: "active" },
 					required: false,
-					attributes: ["id", "status", "startDate", "endDate"],
+					attributes: ["id", "status", "position", "startDate", "endDate", "totalHours", "completedHours", "workSetup", "studentId"],
+					include: [
+						{
+							model: User,
+							as: "student",
+							required: false,
+							attributes: ["id", "firstName", "lastName", "studentId", "email"],
+						},
+					],
 				},
 			],
 		});

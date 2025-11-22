@@ -10,7 +10,9 @@ import {
 	resetPasswordController,
 	editUserController,
 	changePasswordController,
+	updateAllowLoginWithoutRequirementsController,
 } from ".";
+import { handleOAuthCallback } from "../auth/oauth-callback";
 import upload from "@/utils/uploader";
 import { uploadUserAvatarUpdate, uploadUserAvatar } from "@/utils/image-handler";
 import { isAuthenticated } from "@/middlewares/auth";
@@ -33,8 +35,12 @@ router.post("/user/reset-password", resetPasswordController);
 
 // Change password
 router.put("/user/change-password", isAuthenticated, changePasswordController);
+// Update allow login without requirements setting
+router.put("/user/allow-login-without-requirements", isAuthenticated, updateAllowLoginWithoutRequirementsController);
 // Edit user
 router.put("/user/:id", isAuthenticated, uploadUserAvatarUpdate, editUserController);
 
+// OAuth callback
+router.post("/auth/oauth-callback", handleOAuthCallback);
 
 export default router;

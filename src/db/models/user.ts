@@ -73,13 +73,13 @@ export default class User extends Model {
 	})
 	declare email: string;
 
-	@Column({ type: DataType.INTEGER, allowNull: false })
+	@Column({ type: DataType.INTEGER, allowNull: true })
 	declare age: number;
 
-	@Column({ type: DataType.STRING, allowNull: false })
+	@Column({ type: DataType.STRING, allowNull: true })
 	declare phone: string;
 
-	@Column({ type: DataType.STRING, allowNull: false })
+	@Column({ type: DataType.STRING, allowNull: true })
 	declare password: string;
 
 	@Column({
@@ -91,9 +91,15 @@ export default class User extends Model {
 
 	@Column({
 		type: DataType.ENUM("male", "female", "other"),
-		allowNull: false,
+		allowNull: true,
 	})
 	declare gender: Gender;
+
+	@Column({
+		type: DataType.STRING,
+		allowNull: true,
+	})
+	declare provider: string;
 
 	@Column({ type: DataType.STRING, allowNull: true })
 	declare avatar: string;
@@ -154,6 +160,12 @@ export default class User extends Model {
 
 	@Column({ type: DataType.DATE, allowNull: true })
 	declare lastLoginAt: Date;
+
+	@Column({
+		type: DataType.BOOLEAN,
+		defaultValue: false,
+	})
+	declare allowLoginWithoutRequirements: boolean;
 
 	@CreatedAt
 	declare createdAt: Date;
@@ -236,6 +248,9 @@ export default class User extends Model {
 	}
 
 	public async comparePassword(enteredPassword: string): Promise<boolean> {
+		if (!this.password) {
+			return false; // OAuth users don't have passwords
+		}
 		return await bcrypt.compare(enteredPassword, this.password);
 	}
 }

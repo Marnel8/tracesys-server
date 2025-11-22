@@ -15,6 +15,7 @@ import {
 	updateRequirementFileData,
 	getRequirementStatsData,
 } from "@/data/requirement";
+import { logStudentAction } from "@/utils/audit-logger";
 
 export const createRequirementFromTemplateController = async (
 	req: Request,
@@ -128,6 +129,22 @@ export const submitRequirementController = async (req: Request, res: Response) =
 		isPublic: false,
 	} as any);
 
+	// Log audit event
+	await logStudentAction(req, {
+		action: "Requirement Submitted",
+		resource: "Requirements",
+		resourceId: updated.id,
+		details: `Student submitted requirement: ${template.title || "Unknown"}`,
+		category: "submission",
+		severity: "low",
+		status: "success",
+		metadata: {
+			requirementId: updated.id,
+			templateId: template.id,
+			templateName: template.title,
+		},
+	});
+
 	res.status(StatusCodes.OK).json({ success: true, message: "Requirement submitted", data: updated });
 };
 
@@ -138,6 +155,23 @@ export const approveRequirementController = async (req: Request, res: Response) 
 	if (!approverId) throw new BadRequestError("Missing authenticated user context");
 	const { feedback = null } = req.body || {};
 	const result = await approveRequirementData(id, approverId, feedback);
+	
+	// Log audit event
+	await logStudentAction(req, {
+		action: "Requirement Approved",
+		resource: "Requirements",
+		resourceId: id,
+		details: `Instructor approved requirement${feedback ? ` with feedback` : ""}`,
+		category: "submission",
+		severity: "medium",
+		status: "success",
+		metadata: {
+			requirementId: id,
+			approverId,
+			hasFeedback: !!feedback,
+		},
+	});
+	
 	res
 		.status(StatusCodes.OK)
 		.json({ success: true, message: "Requirement approved", data: result });
@@ -151,6 +185,23 @@ export const rejectRequirementController = async (req: Request, res: Response) =
 	const { reason } = req.body || {};
 	if (!reason?.trim()) throw new BadRequestError("Rejection reason is required");
 	const result = await rejectRequirementData(id, approverId, reason);
+	
+	// Log audit event
+	await logStudentAction(req, {
+		action: "Requirement Rejected",
+		resource: "Requirements",
+		resourceId: id,
+		details: `Instructor rejected requirement: ${reason}`,
+		category: "submission",
+		severity: "medium",
+		status: "warning",
+		metadata: {
+			requirementId: id,
+			approverId,
+			rejectionReason: reason,
+		},
+	});
+	
 	res.status(StatusCodes.OK).json({ success: true, message: "Requirement rejected", data: result });
 };
 

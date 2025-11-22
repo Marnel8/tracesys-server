@@ -25,9 +25,14 @@ export const refreshTokenOptions: CookieOptions = {
 	sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
 };
 
-export const sendToken = (user: User, statusCode: number, res: Response) => {
+export const createAuthTokens = (user: User) => {
 	const accessToken = user.SignAccessToken();
 	const refreshToken = user.SignRefreshToken();
+	return { accessToken, refreshToken };
+};
+
+export const sendToken = (user: User, statusCode: number, res: Response) => {
+	const { accessToken, refreshToken } = createAuthTokens(user);
 
 	if (process.env.NODE_ENV === "production") {
 		accessTokenOptions.secure = true;

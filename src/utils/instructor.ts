@@ -18,4 +18,27 @@ export async function instructorOwnsStudent(instructorId: string, studentId: str
 	return !!enrollment;
 }
 
+// Get all student IDs under an instructor's supervision
+export async function getInstructorStudentIds(instructorId: string): Promise<string[]> {
+	try {
+		const enrollments = await StudentEnrollment.findAll({
+			attributes: ["studentId"],
+			include: [
+				{
+					model: Section,
+					as: "section" as any,
+					attributes: [],
+					required: true,
+					where: { instructorId },
+				},
+			],
+		});
+
+		return enrollments.map((enrollment) => enrollment.studentId).filter(Boolean);
+	} catch (error) {
+		console.error("Error fetching instructor student IDs:", error);
+		return [];
+	}
+}
+
 

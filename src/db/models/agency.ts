@@ -59,6 +59,15 @@ export default class Agency extends Model {
 	@Column({ type: DataType.TIME, allowNull: true })
 	declare closingTime: string;
 
+	@Column({ type: DataType.STRING, allowNull: true })
+	declare operatingDays: string;
+
+	@Column({ type: DataType.TIME, allowNull: true })
+	declare lunchStartTime: string;
+
+	@Column({ type: DataType.TIME, allowNull: true })
+	declare lunchEndTime: string;
+
 	@Column({ type: DataType.BOOLEAN, defaultValue: true })
 	declare isActive: boolean;
 

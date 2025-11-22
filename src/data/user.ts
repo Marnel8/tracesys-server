@@ -1,7 +1,7 @@
 import { CreateUserParams } from "@/@types/user";
 import sequelize from "@/db";
 import User, { UserRole } from "@/db/models/user";
-import { BadRequestError, ConflictError, NotFoundError } from "@/utils/error";
+import { BadRequestError, ConflictError, NotFoundError, UnauthorizedError } from "@/utils/error";
 import { deleteFromCloudinary, extractKeyFromUrl } from "@/utils/cloudinary-uploader";
 
 export const findUserByID = async (id: string) => {
@@ -131,6 +131,10 @@ export const login = async ({
 	const isPasswordMatch = await user.comparePassword(password);
 
 	if (!isPasswordMatch) throw new BadRequestError("Invalid Credentials.");
+
+	if (!user.isActive) {
+		throw new UnauthorizedError("Your account has been deactivated. Please contact your administrator.");
+	}
 
 	return user;
 };

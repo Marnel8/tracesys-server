@@ -3,172 +3,144 @@
 	<head>
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>TraceSys Activation Email</title>
+		<title>TracèSys Activation Email</title>
 		<style>
-			@import url("https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap");
+			:root {
+				--primary-50: #f5f3ff;
+				--primary-75: #efe9ff;
+				--primary-100: #e5dcff;
+				--primary-500: #8b5cf6;
+				--primary-600: #7c3aed;
+				--primary-700: #5b21b6;
+				--text-strong: #0f172a;
+				--text-muted: #4c4f6b;
+				--border: #e4e2f7;
+				--brand-gradient: linear-gradient(120deg, #7c3aed, #a855f7, #c084fc);
+			}
+			body {
+				font-family: "Inter", "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+				background: linear-gradient(135deg, #fdf9ff 0%, #ffffff 30%, #f1f5ff 100%);
+				margin: 0;
+				padding: 28px 14px;
+				color: var(--text-strong);
+			}
+			.shell {
+				max-width: 640px;
+				margin: 0 auto;
+			}
+			.card {
+				background: #ffffff;
+				border-radius: 32px;
+				border: 1px solid var(--border);
+				box-shadow: 0 25px 55px rgba(15, 23, 42, 0.08);
+			}
+			.code-box {
+				border-radius: 24px;
+				border: 1px dashed var(--border);
+			}
+			.cta-button {
+				display: inline-block;
+				padding: 16px 36px;
+				border-radius: 999px;
+				background-color: #7c3aed;
+				background-image: var(--brand-gradient);
+				color: #ffffff !important;
+				text-decoration: none;
+				font-weight: 600;
+				font-size: 16px;
+				box-shadow: 0 25px 55px rgba(124, 58, 237, 0.35);
+			}
 		</style>
 	</head>
-	<body
-		style="
-			font-family: 'Poppins', Arial, sans-serif;
-			background-color: #f4f4f4;
-			margin: 0;
-			padding: 20px;
-			-webkit-font-smoothing: antialiased;
-			-moz-osx-font-smoothing: grayscale;
-		"
-	>
-		<div
-			style="
-				max-width: 600px;
-				margin: 0 auto;
-				background-color: #ffffff;
-				border-radius: 16px;
-				overflow: hidden;
-				box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-			"
-		>
-			<!-- Header with gradient -->
-			<div
-				style="
-					background: linear-gradient(135deg, #EEC5EB 0%, #eda3ff 100%);
-					padding: 40px 20px;
-					text-align: center;
-				"
-			>
-				<img
-					src="cid:logo"
-					alt="TraceSys Logo"
-					style="
-						width: 120px;
-						height: auto;
-						margin-bottom: 20px;
-						border-radius: 12px;
-						box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-					"
-				/>
-				<h1
-					style="
-						color: #a21caf;
-						font-size: 32px;
-						margin: 0;
-						font-weight: 600;
-						letter-spacing: -0.5px;
-					"
-				>
-					TraceSys
-				</h1>
-			</div>
-
-			<!-- Content -->
-			<div style="padding: 40px 30px">
-				<p
-					style="
-						font-size: 16px;
-						color: #333;
-						margin-bottom: 25px;
-						line-height: 1.5;
-					"
-				>
-					Hello <%= user.name %>,
-				</p>
-
-				<p
-					style="
-						font-size: 16px;
-						color: #333;
-						margin-bottom: 25px;
-						line-height: 1.5;
-					"
-				>
-					Welcome to TraceSys! To ensure the security of your account, please
-					verify your email address using the activation code below:
-				</p>
-
-				<!-- Activation Code Box -->
-				<div
-					style="
-						background: linear-gradient(135deg, #fdf4ff 0%, #FCEBFF 100%);
-						border-radius: 12px;
-						padding: 30px;
-						text-align: center;
-						margin: 30px 0;
-						box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
-					"
-				>
-					<div
-						style="
-							font-size: 36px;
-							font-weight: 600;
-							color: #86198f;
-							letter-spacing: 4px;
-							margin-bottom: 10px;
-						"
-					>
-						<%= activationCode %>
-					</div>
-					<p style="font-size: 14px; color: #a21caf; margin: 0; opacity: 0.8">
-						This code will expire in 5 minutes
-					</p>
-				</div>
-
-				<p
-					style="
-						font-size: 14px;
-						color: #666;
-						margin-bottom: 25px;
-						line-height: 1.5;
-						font-style: italic;
-					"
-				>
-					If you didn't request this activation code, please ignore this email.
-				</p>
-
-				<!-- Security Notice -->
-				<div
-					style="
-						background-color: #fae8ff;
-						border-radius: 8px;
-						padding: 15px;
-						margin: 30px 0;
-					"
-				>
-					<p style="font-size: 14px; color: #666; margin: 0; line-height: 1.5">
-						🔒 For security reasons, this code can only be used once and will
-						expire after 5 minutes.
-					</p>
-				</div>
-
-				<!-- Footer -->
-				<div
-					style="
-						border-top: 1px solid #eee;
-						margin-top: 40px;
-						padding-top: 20px;
-						text-align: center;
-					"
-				>
-					<p
-						style="
-							font-size: 14px;
-							color: #666;
-							margin-bottom: 15px;
-							line-height: 1.5;
-						"
-					>
-						Need help? Contact our support team at
-						<a
-							href="mailto:noreplytracesys@gmail.com"
-							style="color: #a21caf; text-decoration: none; font-weight: 500"
-							>noreplytracesys@gmail.com</a
-						>
-					</p>
-
-					<p style="font-size: 12px; color: #999; margin: 0">
-						&copy; 2025 TraceSys. All rights reserved.
-					</p>
-				</div>
-			</div>
-		</div>
+	<body>
+		<table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="border-collapse:collapse;">
+			<tr>
+				<td align="center">
+					<table width="100%" cellpadding="0" cellspacing="0" role="presentation" class="shell" style="border-collapse:separate; border-spacing:0 16px;">
+						<tr>
+							<td>
+								<table width="100%" cellpadding="0" cellspacing="0" role="presentation" class="card" style="border-color:rgba(124,58,237,0.25); background:linear-gradient(145deg, rgba(124,58,237,0.06), rgba(255,255,255,0.98));">
+									<tr>
+										<td style="padding:32px;">
+											<table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="border-collapse:collapse;">
+												<tr>
+													<td width="64" valign="top" style="padding-right:16px;">
+														<img src="cid:logo" alt="TracèSys logo" width="56" height="56" style="display:block; border-radius:16px; border:1px solid rgba(124,58,237,0.2);" />
+													</td>
+													<td valign="top">
+														<span style="display:inline-block; padding:6px 18px; border-radius:999px; background:rgba(124,58,237,0.12); color:var(--primary-700); font-size:11px; font-weight:600; letter-spacing:0.24em; text-transform:uppercase;">Activate your account</span>
+														<h1 style="font-size:30px; margin:12px 0 6px; color:var(--text-strong);">Verify your email to get started</h1>
+														<p style="margin:0; color:var(--text-muted); line-height:1.6;">
+															Hi <%= user.name %>, paste the code below to confirm it’s really you and unlock TracèSys.
+														</p>
+													</td>
+												</tr>
+											</table>
+											<table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin-top:20px; border-collapse:collapse;">
+												<tr>
+													<td class="code-box" style="background:var(--primary-75); padding:24px; text-align:center;">
+														<div style="font-size:34px; font-weight:600; letter-spacing:6px; color:var(--primary-700); margin-bottom:6px;"><%= activationCode %></div>
+														<p style="margin:0; font-size:13px; color:var(--text-muted);">Code expires in 5 minutes</p>
+													</td>
+												</tr>
+											</table>
+											<table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin-top:18px; border-collapse:collapse;">
+												<tr>
+													<td>
+														<p style="margin:0; font-size:14px; color:var(--text-muted); line-height:1.5;">
+															If you didn't request this code, you can safely ignore this email.
+														</p>
+													</td>
+												</tr>
+											</table>
+										</td>
+									</tr>
+								</table>
+							</td>
+						</tr>
+						<tr>
+							<td>
+								<table width="100%" cellpadding="0" cellspacing="0" role="presentation" class="card">
+									<tr>
+										<td style="padding:28px;">
+											<p style="margin:0 0 12px; font-weight:600; color:var(--text-strong);">Need a hand?</p>
+											<table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="border-collapse:separate; border-spacing:0 12px;">
+												<tr>
+													<td>
+														<table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="border:1px solid rgba(124,58,237,0.15); border-radius:20px; padding:0;">
+															<tr>
+																<td style="padding:16px;">
+																	<strong style="display:block; margin-bottom:4px; color:var(--text-strong);">Security tip</strong>
+																	<span style="color:var(--text-muted); font-size:14px; line-height:1.5;">The code works once and expires quickly. Keep it private.</span>
+																</td>
+															</tr>
+														</table>
+													</td>
+												</tr>
+												<tr>
+													<td>
+														<table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="border:1px solid rgba(124,58,237,0.15); border-radius:20px;">
+															<tr>
+																<td style="padding:16px;">
+																	<strong style="display:block; margin-bottom:4px; color:var(--text-strong);">Contact support</strong>
+																	<span style="color:var(--text-muted); font-size:14px; line-height:1.5;">
+																		Email <a href="mailto:noreplytracesys@gmail.com" style="color:var(--primary-600); text-decoration:none;">noreplytracesys@gmail.com</a> if something looks off.
+																	</span>
+																</td>
+															</tr>
+														</table>
+													</td>
+												</tr>
+											</table>
+											<p style="margin:18px 0 0; font-size:12px; color:var(--text-muted); text-align:center;">© 2025 TracèSys. All rights reserved.</p>
+										</td>
+									</tr>
+								</table>
+							</td>
+						</tr>
+					</table>
+				</td>
+			</tr>
+		</table>
 	</body>
 </html>

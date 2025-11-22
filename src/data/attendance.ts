@@ -1,5 +1,6 @@
 import { Op } from "sequelize";
 import AttendanceRecord from "@/db/models/attendance-record";
+import DetailedAttendanceLog from "@/db/models/detailed-attendance-log";
 import User from "@/db/models/user";
 import Practicum from "@/db/models/practicum";
 import Agency from "@/db/models/agency";
@@ -103,7 +104,7 @@ export const getAttendanceListData = async (params: ListAttendanceParams) => {
 					{ 
 						model: Agency, 
 						as: "agency" as any,
-						attributes: ["id", "name", "address", "branchType", "openingTime", "closingTime", "contactPerson", "contactRole", "contactPhone", "contactEmail"]
+						attributes: ["id", "name", "address", "branchType", "openingTime", "closingTime", "operatingDays", "lunchStartTime", "lunchEndTime", "contactPerson", "contactRole", "contactPhone", "contactEmail"]
 					}
 				]
 			},
@@ -132,13 +133,134 @@ export const findAttendanceByIdData = async (id: string) => {
 					{ 
 						model: Agency, 
 						as: "agency" as any,
-						attributes: ["id", "name", "address", "branchType", "openingTime", "closingTime", "contactPerson", "contactRole", "contactPhone", "contactEmail"]
+						attributes: ["id", "name", "address", "branchType", "openingTime", "closingTime", "operatingDays", "lunchStartTime", "lunchEndTime", "contactPerson", "contactRole", "contactPhone", "contactEmail"]
 					}
 				]
 			},
 		],
 	});
 	return record;
+};
+
+// Helper function to check if a date is an operating day
+export const checkOperatingDay = (agency: Agency | null, date: Date): boolean => {
+	if (!agency?.operatingDays) return true; // If no operating days set, allow all days
+	
+	const dayName = date.toLocaleDateString(undefined, { weekday: "long" });
+	const operatingDays = agency.operatingDays.split(",").map(d => d.trim());
+	return operatingDays.includes(dayName);
+};
+
+// Helper function to check if time is within operating hours for a session
+export const checkOperatingHours = (
+	agency: Agency | null,
+	currentTime: Date,
+	sessionType: "morning" | "afternoon"
+): { valid: boolean; message?: string } => {
+	if (!agency) return { valid: true }; // If no agency data, allow
+	
+	const currentHour = currentTime.getHours();
+	const currentMinute = currentTime.getMinutes();
+	const currentTimeMinutes = currentHour * 60 + currentMinute;
+
+	// Parse time strings (format: "HH:MM:SS" or "HH:MM")
+	const parseTime = (timeStr: string | null | undefined): number | null => {
+		if (!timeStr) return null;
+		const parts = timeStr.split(":");
+		if (parts.length < 2) return null;
+		return parseInt(parts[0]) * 60 + parseInt(parts[1]);
+	};
+
+	const openingTime = parseTime(agency.openingTime);
+	const closingTime = parseTime(agency.closingTime);
+	const lunchStartTime = parseTime(agency.lunchStartTime);
+	const lunchEndTime = parseTime(agency.lunchEndTime);
+
+	if (sessionType === "morning") {
+		if (!openingTime) return { valid: true }; // No opening time restriction
+		
+		const morningEndTime = lunchStartTime || closingTime || openingTime + 240; // Default 4 hours if no lunch/closing
+		
+		if (currentTimeMinutes < openingTime) {
+			return { valid: false, message: `Morning clock-in is only allowed after ${agency.openingTime}` };
+		}
+		if (lunchStartTime && currentTimeMinutes >= lunchStartTime) {
+			return { valid: false, message: `Morning clock-in must be before lunch time (${agency.lunchStartTime})` };
+		}
+		if (closingTime && currentTimeMinutes > closingTime) {
+			return { valid: false, message: `Clock-in time is after closing time (${agency.closingTime})` };
+		}
+	} else if (sessionType === "afternoon") {
+		if (!lunchEndTime && !closingTime) return { valid: true };
+		
+		const afternoonStartTime = lunchEndTime || (lunchStartTime ? lunchStartTime + 60 : openingTime ? openingTime + 240 : null);
+		if (!afternoonStartTime) return { valid: true };
+		
+		if (lunchEndTime && currentTimeMinutes < lunchEndTime) {
+			return { valid: false, message: `Afternoon clock-in is only allowed after lunch end time (${agency.lunchEndTime})` };
+		}
+		if (closingTime && currentTimeMinutes >= closingTime) {
+			return { valid: false, message: `Afternoon clock-in must be before closing time (${agency.closingTime})` };
+		}
+	}
+
+	return { valid: true };
+};
+
+// Helper function to calculate hours excluding lunch time
+export const calculateHoursWithLunchExclusion = (
+	morningTimeIn: Date | null,
+	morningTimeOut: Date | null,
+	afternoonTimeIn: Date | null,
+	afternoonTimeOut: Date | null,
+	lunchStartTime: string | null | undefined,
+	lunchEndTime: string | null | undefined
+): number => {
+	let totalHours = 0;
+
+	// Calculate morning hours
+	if (morningTimeIn && morningTimeOut) {
+		const morningMs = new Date(morningTimeOut).getTime() - new Date(morningTimeIn).getTime();
+		totalHours += Math.max(0, morningMs / (1000 * 60 * 60));
+	}
+
+	// Calculate afternoon hours
+	if (afternoonTimeIn && afternoonTimeOut) {
+		const afternoonMs = new Date(afternoonTimeOut).getTime() - new Date(afternoonTimeIn).getTime();
+		totalHours += Math.max(0, afternoonMs / (1000 * 60 * 60));
+	}
+
+	// Lunch time is automatically excluded since we calculate morning and afternoon separately
+	return Math.round(totalHours * 100) / 100;
+};
+
+// Helper function to nullify incomplete sessions at end of day
+export const nullifyIncompleteSessions = async (studentId: string, practicumId: string, date: Date) => {
+	const record = await AttendanceRecord.findOne({
+		where: {
+			studentId,
+			practicumId,
+			date: date as any,
+		},
+	});
+
+	if (!record) return;
+
+	const updates: any = {};
+
+	// Nullify morning session if clocked in but not out
+	if (record.morningTimeIn && !record.morningTimeOut) {
+		updates.morningTimeIn = null;
+	}
+
+	// Nullify afternoon session if clocked in but not out
+	if (record.afternoonTimeIn && !record.afternoonTimeOut) {
+		updates.afternoonTimeIn = null;
+	}
+
+	if (Object.keys(updates).length > 0) {
+		await record.update(updates);
+	}
 };
 
 interface ClockInParams {
@@ -155,12 +277,28 @@ interface ClockInParams {
 	macAddress?: string | null;
 	remarks?: "Normal" | "Late" | "Early";
 	photoUrl?: string | null;
+	sessionType?: "morning" | "afternoon";
+	agency?: Agency | null;
 }
 
 export const clockInData = async (params: ClockInParams) => {
 	const now = new Date();
 	const recordDate = params.date ? new Date(params.date) : new Date(now.toISOString().slice(0, 10));
 	const day = params.day ?? recordDate.toLocaleDateString(undefined, { weekday: "long" });
+	const sessionType = params.sessionType || "morning"; // Default to morning for backward compatibility
+
+	// Validate operating day
+	if (params.agency) {
+		if (!checkOperatingDay(params.agency, recordDate)) {
+			throw new Error(`Today (${day}) is not an operating day. Operating days: ${params.agency.operatingDays || "Not set"}`);
+		}
+
+		// Validate operating hours
+		const hoursCheck = checkOperatingHours(params.agency, now, sessionType);
+		if (!hoursCheck.valid) {
+			throw new Error(hoursCheck.message || "Clock-in time is outside operating hours");
+		}
+	}
 
 	let record = await AttendanceRecord.findOne({
 		where: {
@@ -170,41 +308,67 @@ export const clockInData = async (params: ClockInParams) => {
 		},
 	});
 
-	if (!record) {
-		record = await AttendanceRecord.create({
-			studentId: params.studentId,
-			practicumId: params.practicumId,
-			date: recordDate as any,
-			day,
-			status: params.remarks === "Late" ? "late" : "present",
-			timeIn: now,
-			latitude: params.latitude ?? null,
-			longitude: params.longitude ?? null,
-			address: params.address ?? null,
-			timeInLocationType: params.locationType ?? null as any,
-			timeInDeviceType: params.deviceType ?? null as any,
-			timeInDeviceUnit: params.deviceUnit ?? null,
-			timeInMacAddress: params.macAddress ?? null,
-			timeInRemarks: params.remarks ?? "Normal",
-			approvalStatus: "Approved",
-			photoIn: params.photoUrl ?? null,
-		} as any);
-	} else {
-		await record.update({
-			timeIn: now,
-			status: params.remarks === "Late" ? "late" : record.status ?? "present",
-			latitude: params.latitude ?? record.latitude ?? null,
-			longitude: params.longitude ?? record.longitude ?? null,
-			address: params.address ?? record.address ?? null,
-			timeInLocationType: params.locationType ?? record.timeInLocationType ?? null,
-			timeInDeviceType: params.deviceType ?? record.timeInDeviceType ?? null,
-			timeInDeviceUnit: params.deviceUnit ?? record.timeInDeviceUnit ?? null,
-			timeInMacAddress: params.macAddress ?? record.timeInMacAddress ?? null,
-			timeInRemarks: params.remarks ?? record.timeInRemarks ?? "Normal",
-			approvalStatus: "Approved",
-			photoIn: params.photoUrl ?? record.photoIn ?? null,
-		});
+	const updateData: any = {
+		latitude: params.latitude ?? null,
+		longitude: params.longitude ?? null,
+		address: params.address ?? null,
+		timeInLocationType: params.locationType ?? null as any,
+		timeInDeviceType: params.deviceType ?? null as any,
+		timeInDeviceUnit: params.deviceUnit ?? null,
+		timeInMacAddress: params.macAddress ?? null,
+		timeInRemarks: params.remarks ?? "Normal",
+		approvalStatus: "Approved",
+		photoIn: params.photoUrl ?? null,
+		sessionType: sessionType === "morning" || sessionType === "afternoon" ? sessionType : "full_day",
+	};
+
+	if (sessionType === "morning") {
+		// Check if already clocked in for morning
+		if (record?.morningTimeIn && !record.morningTimeOut) {
+			throw new Error("You are already clocked in for the morning session. Please clock out first.");
+		}
+		updateData.morningTimeIn = now;
+		updateData.timeIn = now; // Keep for backward compatibility
+	} else if (sessionType === "afternoon") {
+		// Check if already clocked in for afternoon
+		if (record?.afternoonTimeIn && !record.afternoonTimeOut) {
+			throw new Error("You are already clocked in for the afternoon session. Please clock out first.");
+		}
+		// Ensure morning session is completed or nullified
+		if (record?.morningTimeIn && !record.morningTimeOut) {
+			// Nullify incomplete morning session
+			updateData.morningTimeIn = null;
+		}
+		updateData.afternoonTimeIn = now;
+		updateData.timeIn = now; // Keep for backward compatibility
 	}
+
+	if (!record) {
+		updateData.studentId = params.studentId;
+		updateData.practicumId = params.practicumId;
+		updateData.date = recordDate as any;
+		updateData.day = day;
+		updateData.status = params.remarks === "Late" ? "late" : "present";
+		
+		record = await AttendanceRecord.create(updateData as any);
+	} else {
+		updateData.status = params.remarks === "Late" ? "late" : record.status ?? "present";
+		await record.update(updateData);
+	}
+
+	// Create detailed log entry
+	await DetailedAttendanceLog.create({
+		attendanceRecordId: record.id,
+		sessionType: sessionType,
+		photoIn: params.photoUrl ?? null,
+		timeInLocationType: params.locationType ?? "Inside",
+		timeInDeviceType: params.deviceType ?? "Desktop",
+		timeInDeviceUnit: params.deviceUnit ?? null,
+		timeInMacAddress: params.macAddress ?? null,
+		timeInRemarks: params.remarks ?? "Normal",
+		timeInExactLocation: params.address ?? null,
+		status: "Approved",
+	} as any);
 
 	return record;
 };
@@ -222,11 +386,14 @@ interface ClockOutParams {
 	macAddress?: string | null;
 	remarks?: "Normal" | "Early Departure" | "Overtime";
 	photoUrl?: string | null;
+	sessionType?: "morning" | "afternoon";
+	agency?: Agency | null;
 }
 
 export const clockOutData = async (params: ClockOutParams) => {
 	const now = new Date();
 	const recordDate = params.date ? new Date(params.date) : new Date(now.toISOString().slice(0, 10));
+	const sessionType = params.sessionType || "morning"; // Default to morning for backward compatibility
 
 	const record = await AttendanceRecord.findOne({
 		where: {
@@ -240,16 +407,15 @@ export const clockOutData = async (params: ClockOutParams) => {
 		throw new Error("No attendance record found for today to clock out");
 	}
 
-	// Compute hours if timeIn exists
-	let hours: number | null = record.hours ?? null;
-	if (record.timeIn) {
-		const diffMs = now.getTime() - new Date(record.timeIn).getTime();
-		hours = Math.max(0, Math.round((diffMs / 3600000) * 100) / 100);
+	// Validate operating hours
+	if (params.agency) {
+		const hoursCheck = checkOperatingHours(params.agency, now, sessionType);
+		if (!hoursCheck.valid) {
+			throw new Error(hoursCheck.message || "Clock-out time is outside operating hours");
+		}
 	}
 
-	await record.update({
-		timeOut: now,
-		hours: hours ?? null,
+	const updateData: any = {
 		timeOutLocationType: params.locationType ?? record.timeOutLocationType ?? null,
 		timeOutDeviceType: params.deviceType ?? record.timeOutDeviceType ?? null,
 		timeOutDeviceUnit: params.deviceUnit ?? record.timeOutDeviceUnit ?? null,
@@ -260,7 +426,64 @@ export const clockOutData = async (params: ClockOutParams) => {
 		latitude: params.latitude ?? record.latitude ?? null,
 		longitude: params.longitude ?? record.longitude ?? null,
 		address: params.address ?? record.address ?? null,
+	};
+
+	if (sessionType === "morning") {
+		// Check if clocked in for morning
+		if (!record.morningTimeIn) {
+			throw new Error("You must clock in for the morning session before clocking out");
+		}
+		if (record.morningTimeOut) {
+			throw new Error("You have already clocked out for the morning session");
+		}
+		updateData.morningTimeOut = now;
+		updateData.timeOut = now; // Keep for backward compatibility
+	} else if (sessionType === "afternoon") {
+		// Check if clocked in for afternoon
+		if (!record.afternoonTimeIn) {
+			throw new Error("You must clock in for the afternoon session before clocking out");
+		}
+		if (record.afternoonTimeOut) {
+			throw new Error("You have already clocked out for the afternoon session");
+		}
+		updateData.afternoonTimeOut = now;
+		updateData.timeOut = now; // Keep for backward compatibility
+	}
+
+	// Calculate total hours excluding lunch
+	const totalHours = calculateHoursWithLunchExclusion(
+		record.morningTimeIn || updateData.morningTimeIn || null,
+		updateData.morningTimeOut || record.morningTimeOut || null,
+		record.afternoonTimeIn || updateData.afternoonTimeIn || null,
+		updateData.afternoonTimeOut || record.afternoonTimeOut || null,
+		params.agency?.lunchStartTime,
+		params.agency?.lunchEndTime
+	);
+
+	updateData.hours = totalHours;
+
+	await record.update(updateData);
+
+	// Update detailed log entry
+	const detailedLog = await DetailedAttendanceLog.findOne({
+		where: {
+			attendanceRecordId: record.id,
+			sessionType: sessionType,
+		},
+		order: [["createdAt", "DESC"]],
 	});
+
+	if (detailedLog) {
+		await detailedLog.update({
+			photoOut: params.photoUrl ?? null,
+			timeOutLocationType: params.locationType ?? null,
+			timeOutDeviceType: params.deviceType ?? null,
+			timeOutDeviceUnit: params.deviceUnit ?? null,
+			timeOutMacAddress: params.macAddress ?? null,
+			timeOutRemarks: params.remarks ?? "Normal",
+			timeOutExactLocation: params.address ?? null,
+		} as any);
+	}
 
 	return record;
 };

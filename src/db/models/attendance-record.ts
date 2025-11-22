@@ -46,6 +46,27 @@ export default class AttendanceRecord extends Model {
 	@Column({ type: DataType.DATE, allowNull: true })
 	declare timeOut: Date;
 
+	// Morning session fields
+	@Column({ type: DataType.DATE, allowNull: true })
+	declare morningTimeIn: Date;
+
+	@Column({ type: DataType.DATE, allowNull: true })
+	declare morningTimeOut: Date;
+
+	// Afternoon session fields
+	@Column({ type: DataType.DATE, allowNull: true })
+	declare afternoonTimeIn: Date;
+
+	@Column({ type: DataType.DATE, allowNull: true })
+	declare afternoonTimeOut: Date;
+
+	// Session type for legacy records
+	@Column({
+		type: DataType.ENUM("morning", "afternoon", "full_day"),
+		allowNull: true,
+	})
+	declare sessionType: "morning" | "afternoon" | "full_day";
+
 	@Column({ type: DataType.FLOAT, allowNull: true })
 	declare hours: number;
 
@@ -207,6 +228,9 @@ export default class AttendanceRecord extends Model {
 
 	@HasOne(() => DetailedAttendanceLog, "attendanceRecordId")
 	declare detailedLog: DetailedAttendanceLog;
+
+	// Support multiple detailed logs (one per session)
+	declare detailedLogs?: DetailedAttendanceLog[];
 }
 
 

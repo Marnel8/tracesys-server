@@ -52,6 +52,12 @@ export default class Report extends Model {
 	@Column({ type: DataType.INTEGER, allowNull: true })
 	declare weekNumber: number;
 
+	@Column({ type: DataType.DATE, allowNull: true })
+	declare startDate: Date;
+
+	@Column({ type: DataType.DATE, allowNull: true })
+	declare endDate: Date;
+
 	@Column({
 		type: DataType.ENUM("draft", "submitted", "approved", "rejected"),
 		allowNull: false,

@@ -25,6 +25,7 @@ import AuditLog from "./models/audit-log";
 import AchievementTemplate from "./models/achievement-template";
 import Achievement from "./models/achievement";
 import FileAttachment from "./models/file-attachment";
+import Invitation from "./models/invitation";
 
 const sequelize = new Sequelize({
 	database: process.env.DB_NAME,
@@ -56,6 +57,7 @@ const sequelize = new Sequelize({
 		AchievementTemplate,
 		Achievement,
 		FileAttachment,
+		Invitation,
 	],
 	password: process.env.DB_PASSWORD,
 	define: {

@@ -147,6 +147,12 @@ export class User extends Model {
 	@Column({ type: DataType.DATE, allowNull: true })
 	declare lastLoginAt: Date;
 
+	@Column({
+		type: DataType.BOOLEAN,
+		defaultValue: false,
+	})
+	declare allowLoginWithoutRequirements: boolean;
+
 	@CreatedAt
 	declare createdAt: Date;
 
@@ -1090,6 +1096,12 @@ export class Report extends Model {
 
 	@Column({ type: DataType.INTEGER, allowNull: true })
 	declare weekNumber: number;
+
+	@Column({ type: DataType.DATE, allowNull: true })
+	declare startDate: Date;
+
+	@Column({ type: DataType.DATE, allowNull: true })
+	declare endDate: Date;
 
 	@Column({
 		type: DataType.ENUM("draft", "submitted", "approved", "rejected"),

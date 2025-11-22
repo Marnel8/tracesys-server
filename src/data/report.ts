@@ -25,6 +25,8 @@ interface GetReportsParams {
 	studentId?: string;
 	practicumId?: string;
 	weekNumber?: number;
+	startDate?: Date;
+	endDate?: Date;
 	instructorId?: string;
 }
 
@@ -57,6 +59,8 @@ export const createReportData = async (params: {
 	content?: string | null;
 	type: ReportType;
 	weekNumber?: number | null;
+	startDate?: Date | null;
+	endDate?: Date | null;
 	dueDate?: Date | null;
 }) => {
 	const report = await Report.create({
@@ -66,6 +70,8 @@ export const createReportData = async (params: {
 		content: params.content ?? "",
 		type: params.type,
 		weekNumber: typeof params.weekNumber === "number" ? params.weekNumber : null,
+		startDate: params.startDate ?? null,
+		endDate: params.endDate ?? null,
 		status: "draft",
 		dueDate: params.dueDate ?? null,
 	} as any);
@@ -93,15 +99,19 @@ export const createNarrativeReportData = async (params: {
 };
 
 export const getReportsData = async (params: GetReportsParams) => {
-	const { page, limit, search, status, type, studentId, practicumId, weekNumber, instructorId } = params;
+	const { page, limit, search, status, type, studentId, practicumId, weekNumber, startDate, endDate, instructorId } = params;
 	const offset = (page - 1) * limit;
 
 	const where: any = {};
+	const andConditions: any[] = [];
+	
 	if (search) {
-		where[Op.or] = [
-			{ title: { [Op.iLike]: `%${search}%` } },
-			{ content: { [Op.iLike]: `%${search}%` } },
-		];
+		andConditions.push({
+			[Op.or]: [
+				{ title: { [Op.iLike]: `%${search}%` } },
+				{ content: { [Op.iLike]: `%${search}%` } },
+			],
+		});
 	}
 	if (status && status !== "all") {
 		where.status = status;
@@ -117,6 +127,61 @@ export const getReportsData = async (params: GetReportsParams) => {
 	}
 	if (typeof weekNumber === "number") {
 		where.weekNumber = weekNumber;
+	}
+	if (startDate && endDate) {
+		// Filter reports where the report's date range overlaps with the query range
+		// or where submittedDate falls within the query range
+		// This handles both reports with date ranges and reports without (null dates)
+		andConditions.push({
+			[Op.or]: [
+				{
+					[Op.and]: [
+						{ startDate: { [Op.ne]: null } }, // Ensure startDate is not null
+						{ endDate: { [Op.ne]: null } }, // Ensure endDate is not null
+						{ startDate: { [Op.lte]: endDate } },
+						{ endDate: { [Op.gte]: startDate } },
+					],
+				},
+				{
+					submittedDate: {
+						[Op.between]: [startDate, endDate],
+					},
+				},
+			],
+		});
+	} else if (startDate) {
+		andConditions.push({
+			[Op.or]: [
+				{
+					[Op.and]: [
+						{ startDate: { [Op.ne]: null } },
+						{ startDate: { [Op.gte]: startDate } },
+					],
+				},
+				{
+					submittedDate: { [Op.gte]: startDate },
+				},
+			],
+		});
+	} else if (endDate) {
+		andConditions.push({
+			[Op.or]: [
+				{
+					[Op.and]: [
+						{ endDate: { [Op.ne]: null } },
+						{ endDate: { [Op.lte]: endDate } },
+					],
+				},
+				{
+					submittedDate: { [Op.lte]: endDate },
+				},
+			],
+		});
+	}
+	
+	// Combine all conditions with AND
+	if (andConditions.length > 0) {
+		where[Op.and] = andConditions;
 	}
 
 	const { count, rows } = await Report.findAndCountAll({
@@ -195,6 +260,8 @@ export const updateReportSubmissionData = async (
 		title?: string;
 		fileUrl?: string | null;
 		weekNumber?: number | null;
+		startDate?: Date | null;
+		endDate?: Date | null;
 		hoursLogged?: number | null;
 		activities?: string | null;
 		learnings?: string | null;
@@ -208,6 +275,8 @@ export const updateReportSubmissionData = async (
 		title: updates.title ?? report.title,
 		fileUrl: updates.fileUrl ?? report.fileUrl ?? null,
 		weekNumber: typeof updates.weekNumber === "number" ? updates.weekNumber : report.weekNumber,
+		startDate: updates.startDate ?? report.startDate ?? null,
+		endDate: updates.endDate ?? report.endDate ?? null,
 		hoursLogged: typeof updates.hoursLogged === "number" ? updates.hoursLogged : report.hoursLogged,
 		activities: updates.activities ?? report.activities ?? null,
 		learnings: updates.learnings ?? report.learnings ?? null,

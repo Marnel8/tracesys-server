@@ -31,6 +31,9 @@ interface AgencyData {
 	branchType: "Main" | "Branch";
 	openingTime?: string;
 	closingTime?: string;
+	operatingDays?: string;
+	lunchStartTime?: string;
+	lunchEndTime?: string;
 	isActive?: boolean;
 	latitude?: number;
 	longitude?: number;
@@ -58,6 +61,9 @@ export const createAgencyController = async (req: Request, res: Response) => {
 		branchType,
 		openingTime,
 		closingTime,
+		operatingDays,
+		lunchStartTime,
+		lunchEndTime,
 		isActive = true,
 		latitude,
 		longitude,
@@ -77,6 +83,9 @@ export const createAgencyController = async (req: Request, res: Response) => {
 		branchType,
 		openingTime,
 		closingTime,
+		operatingDays,
+		lunchStartTime,
+		lunchEndTime,
 		isActive,
 		latitude,
 		longitude,
@@ -109,13 +118,14 @@ export const createAgencyController = async (req: Request, res: Response) => {
 };
 
 export const getAgenciesController = async (req: Request, res: Response) => {
-	const { page = 1, limit = 10, search = "", status = "all" } = req.query;
+	const { page = 1, limit = 10, search = "", status = "all", branchType = "all" } = req.query;
 
 	const result = await getAgenciesData({
 		page: Number(page),
 		limit: Number(limit),
 		search: search as string,
 		status: status as string,
+		branchType: branchType as string,
 	});
 
 	res.status(StatusCodes.OK).json({
