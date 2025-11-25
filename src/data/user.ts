@@ -47,6 +47,34 @@ export const createUserData = async (userData: CreateUserParams) => {
             }
         }
 
+		// Determine role: validate consistency and infer if needed
+		let finalRole: UserRole;
+		
+		// If role is explicitly provided, validate it
+		if (userData.role) {
+			finalRole = userData.role;
+			
+			// Validate role consistency with IDs
+			if (userData.instructorId && finalRole !== UserRole.INSTRUCTOR) {
+				await t.rollback();
+				throw new BadRequestError("If instructorId is provided, role must be 'instructor'.");
+			}
+			if (userData.studentId && finalRole !== UserRole.STUDENT) {
+				await t.rollback();
+				throw new BadRequestError("If studentId is provided, role must be 'student'.");
+			}
+		} else {
+			// Infer role from IDs if not explicitly provided
+			if (userData.instructorId) {
+				finalRole = UserRole.INSTRUCTOR;
+			} else if (userData.studentId) {
+				finalRole = UserRole.STUDENT;
+			} else {
+				// Default to USER if no role or ID provided
+				finalRole = UserRole.USER;
+			}
+		}
+
 		const user = await User.create(
 			{
 				firstName: userData.firstName,
@@ -62,7 +90,8 @@ export const createUserData = async (userData: CreateUserParams) => {
 				bio: userData?.bio,
 				studentId: userData?.studentId,
 				instructorId: userData?.instructorId,
-				role: userData?.role ?? UserRole.USER,
+				departmentId: userData?.departmentId,
+				role: finalRole, // Explicitly set role, don't rely on database defaults
 			},
 			{ transaction: t }
 		);

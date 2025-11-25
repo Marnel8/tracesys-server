@@ -43,10 +43,40 @@ export const registerUserController = async (req: Request, res: Response) => {
 		bio,
 		studentId,
 		instructorId,
+		departmentId,
 	} = req.body;
 
 	if (!firstName || !lastName || !email || !password) {
 		throw new BadRequestError("Please provide all necessary data.");
+	}
+
+	// Validate and convert role
+	let validatedRole: UserRole | undefined;
+	if (role) {
+		// Convert string role to UserRole enum if needed
+		const roleString = typeof role === "string" ? role.toLowerCase() : role;
+		const validRoles = Object.values(UserRole);
+		if (!validRoles.includes(roleString as UserRole)) {
+			throw new BadRequestError(`Invalid role. Must be one of: ${validRoles.join(", ")}`);
+		}
+		validatedRole = roleString as UserRole;
+	}
+
+	// Validate role consistency with IDs
+	if (instructorId && validatedRole && validatedRole !== UserRole.INSTRUCTOR) {
+		throw new BadRequestError("If instructorId is provided, role must be 'instructor'.");
+	}
+	if (studentId && validatedRole && validatedRole !== UserRole.STUDENT) {
+		throw new BadRequestError("If studentId is provided, role must be 'student'.");
+	}
+
+	// Infer role from IDs if not explicitly provided
+	if (!validatedRole) {
+		if (instructorId) {
+			validatedRole = UserRole.INSTRUCTOR;
+		} else if (studentId) {
+			validatedRole = UserRole.STUDENT;
+		}
 	}
 
 	// Handle avatar upload if provided - use Cloudinary URL if available
@@ -58,7 +88,7 @@ export const registerUserController = async (req: Request, res: Response) => {
 		email,
 		password,
 		age,
-		role,
+		role: validatedRole,
 		gender,
 		phone,
 		middleName,
@@ -66,6 +96,7 @@ export const registerUserController = async (req: Request, res: Response) => {
 		bio,
 		studentId,
 		instructorId,
+		departmentId,
 		avatar,
 	};
 
@@ -129,6 +160,7 @@ export const activateUserController = async (req: Request, res: Response) => {
 		bio,
 		studentId,
 		instructorId,
+		departmentId,
 	} = newUser.user as any;
 
 	const user = await createUserData({
@@ -146,6 +178,7 @@ export const activateUserController = async (req: Request, res: Response) => {
 		bio,
 		studentId,
 		instructorId,
+		departmentId,
 	});
 
 	res.status(StatusCodes.CREATED).json(user);

@@ -29,6 +29,7 @@ export type CreateUserParams = {
 	bio?: string;
 	studentId?: string;
 	instructorId?: string;
+	departmentId?: string;
 };
 
 export type FindUserParams = {
