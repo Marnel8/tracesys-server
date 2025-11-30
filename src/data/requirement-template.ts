@@ -44,7 +44,7 @@ export const createRequirementTemplateData = async (
 		// Prevent duplicate titles (case-insensitive)
 		const existing = await RequirementTemplate.findOne({
 			where: {
-				title: { [Op.iLike]: data.title },
+				title: { [Op.like]: data.title },
 			},
 		});
 
@@ -73,8 +73,8 @@ export const getRequirementTemplatesData = async (
 		const whereClause: any = {};
 		if (search) {
 			whereClause[Op.or] = [
-				{ title: { [Op.iLike]: `%${search}%` } },
-				{ description: { [Op.iLike]: `%${search}%` } },
+				{ title: { [Op.like]: `%${search}%` } },
+				{ description: { [Op.like]: `%${search}%` } },
 			];
 		}
 		if (status && status !== "all") {
@@ -127,7 +127,7 @@ export const updateRequirementTemplateData = async (
 		if (updateData.title && updateData.title !== template.title) {
 			const existing = await RequirementTemplate.findOne({
 				where: {
-					title: { [Op.iLike]: updateData.title },
+					title: { [Op.like]: updateData.title },
 					id: { [Op.ne]: id },
 				},
 			});

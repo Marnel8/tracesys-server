@@ -81,9 +81,9 @@ export const getAgenciesData = async (params: GetAgenciesParams) => {
 
 		if (search) {
 			whereClause[Op.or] = [
-				{ name: { [Op.iLike]: `%${search}%` } },
-				{ contactPerson: { [Op.iLike]: `%${search}%` } },
-				{ contactEmail: { [Op.iLike]: `%${search}%` } },
+				{ name: { [Op.like]: `%${search}%` } },
+				{ contactPerson: { [Op.like]: `%${search}%` } },
+				{ contactEmail: { [Op.like]: `%${search}%` } },
 			];
 		}
 
@@ -285,10 +285,10 @@ export const getSupervisorsData = async (params: GetSupervisorsParams) => {
 
 		if (search) {
 			whereClause[Op.or] = [
-				{ name: { [Op.iLike]: `%${search}%` } },
-				{ email: { [Op.iLike]: `%${search}%` } },
-				{ position: { [Op.iLike]: `%${search}%` } },
-				{ department: { [Op.iLike]: `%${search}%` } },
+				{ name: { [Op.like]: `%${search}%` } },
+				{ email: { [Op.like]: `%${search}%` } },
+				{ position: { [Op.like]: `%${search}%` } },
+				{ department: { [Op.like]: `%${search}%` } },
 			];
 		}
 

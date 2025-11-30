@@ -67,8 +67,8 @@ export const getSectionsData = async (params: GetSectionsParams) => {
 
 		if (search) {
 			whereClause[Op.or] = [
-				{ name: { [Op.iLike]: `%${search}%` } },
-				{ code: { [Op.iLike]: `%${search}%` } },
+				{ name: { [Op.like]: `%${search}%` } },
+				{ code: { [Op.like]: `%${search}%` } },
 			];
 		}
 

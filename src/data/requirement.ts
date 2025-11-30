@@ -59,8 +59,8 @@ export const getRequirementsData = async (params: GetRequirementsParams) => {
 	const where: any = {};
 	if (search) {
 		where[Op.or] = [
-			{ title: { [Op.iLike]: `%${search}%` } },
-			{ description: { [Op.iLike]: `%${search}%` } },
+			{ title: { [Op.like]: `%${search}%` } },
+			{ description: { [Op.like]: `%${search}%` } },
 		];
 	}
 	if (status && status !== "all") {

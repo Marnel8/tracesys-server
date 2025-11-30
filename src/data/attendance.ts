@@ -33,10 +33,10 @@ export const getAttendanceListData = async (params: ListAttendanceParams) => {
 	const where: any = {};
 	if (search?.trim()) {
 		where[Op.or] = [
-			{ day: { [Op.iLike]: `%${search}%` } },
-			{ '$student.firstName$': { [Op.iLike]: `%${search}%` } },
-			{ '$student.lastName$': { [Op.iLike]: `%${search}%` } },
-			{ '$student.studentId$': { [Op.iLike]: `%${search}%` } },
+			{ day: { [Op.like]: `%${search}%` } },
+			{ '$student.firstName$': { [Op.like]: `%${search}%` } },
+			{ '$student.lastName$': { [Op.like]: `%${search}%` } },
+			{ '$student.studentId$': { [Op.like]: `%${search}%` } },
 		];
 	}
 	if (status && status !== "all") {

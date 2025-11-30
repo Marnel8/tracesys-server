@@ -1,5 +1,18 @@
 import sequelize from "@/db";
 import Invitation from "@/db/models/invitation";
+import User from "@/db/models/user";
+import StudentEnrollment from "@/db/models/student-enrollment";
+import Requirement from "@/db/models/requirement";
+import Report from "@/db/models/report";
+import AttendanceRecord from "@/db/models/attendance-record";
+import Practicum from "@/db/models/practicum";
+import Announcement from "@/db/models/announcement";
+import Achievement from "@/db/models/achievement";
+import FileAttachment from "@/db/models/file-attachment";
+import RequirementComment from "@/db/models/requirement-comment";
+import AnnouncementComment from "@/db/models/announcement-comment";
+import Section from "@/db/models/section";
+import Department from "@/db/models/department";
 import { BadRequestError, NotFoundError, ConflictError } from "@/utils/error";
 import { Op } from "sequelize";
 import crypto from "crypto";
@@ -229,22 +242,174 @@ export const getInvitationsByInstructor = async (
 };
 
 export const deleteInvitation = async (invitationId: string, instructorId: string): Promise<void> => {
-	const invitation = await Invitation.findOne({
-		where: {
-			id: invitationId,
-			createdBy: instructorId,
-		},
-	});
+	const t = await sequelize.transaction();
 
-	if (!invitation) {
-		throw new NotFoundError("Invitation not found or you don't have permission to delete it.");
+	try {
+		const invitation = await Invitation.findOne({
+			where: {
+				id: invitationId,
+				createdBy: instructorId,
+			},
+			transaction: t,
+		});
+
+		if (!invitation) {
+			await t.rollback();
+			throw new NotFoundError("Invitation not found or you don't have permission to delete it.");
+		}
+
+		// If invitation was used, delete the associated user account
+		if (invitation.usedAt) {
+			const user = await User.findOne({
+				where: {
+					email: invitation.email,
+					role: invitation.role,
+				},
+				transaction: t,
+			});
+
+			if (user) {
+				// Delete student-related records
+				if (invitation.role === "student") {
+					// Delete student enrollments
+					await StudentEnrollment.destroy({
+						where: { studentId: user.id },
+						transaction: t,
+					});
+
+					// Delete requirements and their comments
+					const requirementIds = await Requirement.findAll({
+						where: { studentId: user.id },
+						attributes: ["id"],
+						transaction: t,
+					});
+					if (requirementIds.length > 0) {
+						await RequirementComment.destroy({
+							where: {
+								requirementId: { [Op.in]: requirementIds.map((r) => r.id) },
+							},
+							transaction: t,
+						});
+					}
+					await Requirement.destroy({
+						where: { studentId: user.id },
+						transaction: t,
+					});
+
+					// Delete reports
+					await Report.destroy({
+						where: { studentId: user.id },
+						transaction: t,
+					});
+
+					// Delete attendance records
+					await AttendanceRecord.destroy({
+						where: { studentId: user.id },
+						transaction: t,
+					});
+
+					// Delete practicums
+					await Practicum.destroy({
+						where: { studentId: user.id },
+						transaction: t,
+					});
+
+					// Delete achievements where user is the student
+					await Achievement.destroy({
+						where: { studentId: user.id },
+						transaction: t,
+					});
+				}
+
+				// Delete instructor-related records
+				if (invitation.role === "instructor") {
+					// Set NULL for sections where user is instructor
+					await Section.update(
+						{ instructorId: null },
+						{ where: { instructorId: user.id }, transaction: t }
+					);
+
+					// Set NULL for departments where user is head
+					await Department.update(
+						{ headId: null },
+						{ where: { headId: user.id }, transaction: t }
+					);
+
+					// Delete announcements authored by user
+					const announcementIds = await Announcement.findAll({
+						where: { authorId: user.id },
+						attributes: ["id"],
+						transaction: t,
+					});
+					if (announcementIds.length > 0) {
+						await AnnouncementComment.destroy({
+							where: {
+								announcementId: { [Op.in]: announcementIds.map((a) => a.id) },
+							},
+							transaction: t,
+						});
+					}
+					await Announcement.destroy({
+						where: { authorId: user.id },
+						transaction: t,
+					});
+				}
+
+				// Delete records that apply to both roles
+				// Delete file attachments
+				await FileAttachment.destroy({
+					where: { uploadedBy: user.id },
+					transaction: t,
+				});
+
+				// Set NULL for approvedBy fields in requirements
+				await Requirement.update(
+					{ approvedBy: null },
+					{ where: { approvedBy: user.id }, transaction: t }
+				);
+
+				// Set NULL for approvedBy fields in reports
+				await Report.update(
+					{ approvedBy: null },
+					{ where: { approvedBy: user.id }, transaction: t }
+				);
+
+				// Set NULL for approvedBy fields in attendance records
+				await AttendanceRecord.update(
+					{ approvedBy: null },
+					{ where: { approvedBy: user.id }, transaction: t }
+				);
+
+				// Set NULL for awardedBy fields in achievements
+				await Achievement.update(
+					{ awardedBy: null },
+					{ where: { awardedBy: user.id }, transaction: t }
+				);
+
+				// Delete comments by user
+				await RequirementComment.destroy({
+					where: { userId: user.id },
+					transaction: t,
+				});
+
+				await AnnouncementComment.destroy({
+					where: { userId: user.id },
+					transaction: t,
+				});
+
+				// Delete the user account
+				await user.destroy({ transaction: t });
+			}
+		}
+
+		// Delete the invitation
+		await invitation.destroy({ transaction: t });
+
+		await t.commit();
+	} catch (error) {
+		await t.rollback();
+		throw error;
 	}
-
-	if (invitation.isUsed()) {
-		throw new BadRequestError("Cannot delete an invitation that has already been used.");
-	}
-
-	await invitation.destroy();
 };
 
 export const getInvitationByToken = async (token: string): Promise<Invitation | null> => {

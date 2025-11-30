@@ -3,6 +3,10 @@ import Announcement from "@/db/models/announcement";
 import User from "@/db/models/user";
 import AnnouncementTarget from "@/db/models/announcement-target";
 import AnnouncementComment from "@/db/models/announcement-comment";
+import StudentEnrollment from "@/db/models/student-enrollment";
+import Section from "@/db/models/section";
+import Course from "@/db/models/course";
+import Department from "@/db/models/department";
 
 interface CreateAnnouncementParams {
 	title: string;
@@ -53,15 +57,25 @@ export const createAnnouncementData = async (data: CreateAnnouncementParams) => 
 		} as any);
 
 		// Create targets if provided
+		// If no targets provided, create a default "all" target
 		if (data.targets && data.targets.length > 0) {
-			const targetPromises = data.targets.map(target =>
-				AnnouncementTarget.create({
-					announcementId: announcement.id,
-					targetType: target.targetType,
-					targetId: target.targetId,
-				} as any)
-			);
+			const targetPromises = data.targets
+				.filter(target => target.targetType) // Filter out invalid targets
+				.map(target =>
+					AnnouncementTarget.create({
+						announcementId: announcement.id,
+						targetType: target.targetType,
+						targetId: target.targetId || null, // Ensure null instead of undefined
+					} as any)
+				);
 			await Promise.all(targetPromises);
+		} else {
+			// Default to "all" if no targets specified
+			await AnnouncementTarget.create({
+				announcementId: announcement.id,
+				targetType: "all",
+				targetId: null,
+			} as any);
 		}
 
 		// Fetch the created announcement with relations
@@ -109,8 +123,8 @@ export const getAnnouncementsData = async (params: GetAnnouncementsParams) => {
 		if (search) {
 			whereClause[Op.and].push({
 				[Op.or]: [
-					{ title: { [Op.iLike]: `%${search}%` } },
-					{ content: { [Op.iLike]: `%${search}%` } },
+					{ title: { [Op.like]: `%${search}%` } },
+					{ content: { [Op.like]: `%${search}%` } },
 				],
 			});
 		}
@@ -127,10 +141,75 @@ export const getAnnouncementsData = async (params: GetAnnouncementsParams) => {
 			whereClause[Op.and].push({ authorId });
 		}
 
+		// Filter by userId if provided (for student-specific announcements)
+		let studentContext: {
+			sectionIds: string[];
+			courseIds: string[];
+			departmentId: string | null;
+		} | null = null;
+
+		if (userId) {
+			// Fetch student enrollment information
+			const student = await User.findByPk(userId, {
+				include: [
+					{
+						model: StudentEnrollment,
+						as: "enrollments",
+						where: { status: "enrolled" },
+						required: false,
+						include: [
+							{
+								model: Section,
+								as: "section",
+								include: [
+									{
+										model: Course,
+										as: "course",
+										include: [
+											{
+												model: Department,
+												as: "department",
+											},
+										],
+									},
+								],
+							},
+						],
+					},
+					{
+						model: Department,
+						as: "department",
+						required: false,
+					},
+				],
+			});
+
+			if (student) {
+				const enrollments = (student as any).enrollments || [];
+				const sectionIds = enrollments
+					.map((enrollment: any) => enrollment?.section?.id)
+					.filter(Boolean);
+				const courseIds = enrollments
+					.map((enrollment: any) => enrollment?.section?.course?.id)
+					.filter(Boolean);
+				const departmentId = (student as any).department?.id || null;
+
+				studentContext = {
+					sectionIds,
+					courseIds,
+					departmentId,
+				};
+			}
+		}
+
+		// When filtering by userId, we need to fetch matching announcements first
+		// then filter by student context, then paginate
+		// Fetch a reasonable amount (up to 500) to account for filtering, then paginate after
+		const maxFetchLimit = userId ? Math.min(500, limit * 10) : limit; // Fetch more if filtering by userId
 		const { count, rows: announcements } = await Announcement.findAndCountAll({
 			where: whereClause,
-			limit,
-			offset,
+			limit: maxFetchLimit,
+			offset: userId ? 0 : offset, // Start from beginning if filtering by userId
 			order: [
 				["isPinned", "DESC"],
 				["createdAt", "DESC"],
@@ -155,20 +234,71 @@ export const getAnnouncementsData = async (params: GetAnnouncementsParams) => {
 			],
 		});
 
+		// Filter announcements by student context if userId is provided
+		// Note: We need to filter ALL announcements first, then paginate
+		// So we fetch all matching announcements, filter them, then apply pagination
+		let allFilteredAnnouncements = announcements;
+		if (userId) {
+			allFilteredAnnouncements = announcements.filter((announcement) => {
+				const targets = (announcement as any).targets || [];
+				
+				// If no targets, don't include (shouldn't happen, but safety check)
+				if (targets.length === 0) {
+					return false;
+				}
+
+				// Check each target
+				return targets.some((target: any) => {
+					// If target is "all", include for everyone (even if studentContext is null)
+					if (target.targetType === "all") {
+						return true;
+					}
+
+					// If studentContext is null (no enrollments), only show "all" targeted announcements
+					if (!studentContext) {
+						return false;
+					}
+
+					// If target is "section", check if student is enrolled in that section
+					if (target.targetType === "section" && target.targetId) {
+						return studentContext.sectionIds.includes(target.targetId);
+					}
+
+					// If target is "course", check if student is enrolled in a section with that course
+					if (target.targetType === "course" && target.targetId) {
+						return studentContext.courseIds.includes(target.targetId);
+					}
+
+					// If target is "department", check if student belongs to that department
+					if (target.targetType === "department" && target.targetId) {
+						return studentContext.departmentId === target.targetId;
+					}
+
+					// Default: don't include
+					return false;
+				});
+			});
+		}
+
+		// Apply pagination AFTER filtering
+		const totalFilteredCount = allFilteredAnnouncements.length;
+		const paginatedAnnouncements = allFilteredAnnouncements.slice(offset, offset + limit);
+
 		// Add comment count to each announcement
-		const announcementsWithCommentCount = announcements.map(announcement => ({
+		const announcementsWithCommentCount = paginatedAnnouncements.map(announcement => ({
 			...announcement.toJSON(),
 			commentCount: announcement.comments?.length || 0,
 		}));
 
-		const totalPages = Math.ceil(count / limit);
+		// Calculate pagination based on total filtered count (before pagination)
+		const totalPages = Math.ceil(totalFilteredCount / limit);
 
 		return {
 			announcements: announcementsWithCommentCount,
 			pagination: {
 				currentPage: page,
 				totalPages,
-				totalItems: count,
+				totalItems: totalFilteredCount,
 				itemsPerPage: limit,
 			},
 		};

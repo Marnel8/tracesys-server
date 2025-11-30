@@ -108,8 +108,8 @@ export const getReportsData = async (params: GetReportsParams) => {
 	if (search) {
 		andConditions.push({
 			[Op.or]: [
-				{ title: { [Op.iLike]: `%${search}%` } },
-				{ content: { [Op.iLike]: `%${search}%` } },
+				{ title: { [Op.like]: `%${search}%` } },
+				{ content: { [Op.like]: `%${search}%` } },
 			],
 		});
 	}
