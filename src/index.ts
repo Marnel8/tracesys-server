@@ -25,10 +25,12 @@ app.use(
   cors({
     origin: [
       "http://localhost:3000",
-      process.env.CLIENT_URL || "https://tracecys.vercel.app",
+      process.env.CLIENT_URL || "https://tracesys.vercel.app",
     ].filter(Boolean), // Remove any undefined values
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE"],
+    allowedHeaders: ["Content-Type", "Authorization", "Cookie"],
+    exposedHeaders: ["Set-Cookie"],
   })
 );
 
