@@ -16,8 +16,8 @@ import StudentEnrollment from "@/db/models/student-enrollment";
 import Section from "@/db/models/section";
 import Requirement from "@/db/models/requirement";
 import {
-  accessTokenOptions,
-  refreshTokenOptions,
+  getAccessTokenOptions,
+  getRefreshTokenOptions,
   createAuthTokens,
 } from "@/utils/jwt";
 
@@ -114,13 +114,12 @@ export const handleOAuthCallback = async (req: Request, res: Response) => {
   const issueTokens = (user: User) => {
     const { accessToken, refreshToken } = createAuthTokens(user);
 
-    if (process.env.NODE_ENV === "production") {
-      accessTokenOptions.secure = true;
-      refreshTokenOptions.secure = true;
-    }
+    // Use getter functions to ensure correct cookie configuration
+    const accessOptions = getAccessTokenOptions();
+    const refreshOptions = getRefreshTokenOptions();
 
-    res.cookie("access_token", accessToken, accessTokenOptions);
-    res.cookie("refresh_token", refreshToken, refreshTokenOptions);
+    res.cookie("access_token", accessToken, accessOptions);
+    res.cookie("refresh_token", refreshToken, refreshOptions);
 
     return { accessToken, refreshToken };
   };

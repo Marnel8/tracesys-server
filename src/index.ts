@@ -22,44 +22,48 @@ app.use(cookieParser());
 app.set("trust proxy", 1);
 
 app.use(
-	cors({
-		origin: ["http://localhost:3000", "https://tracecys.vercel.app"],
-		credentials: true,
-		methods: ["GET", "POST", "PUT", "DELETE"],
-	})
+  cors({
+    origin: [
+      "http://localhost:3000",
+      process.env.CLIENT_URL || "https://tracecys.vercel.app",
+    ].filter(Boolean), // Remove any undefined values
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE"],
+  })
 );
 
 // Resolve uploads directory for both dev (src) and prod (dist) without relying on __dirname
 const projectRoot = process.cwd();
 const candidateUploads = [
-	path.join(projectRoot, "uploads"),
-	path.join(projectRoot, "src", "uploads"),
-	path.join(projectRoot, "dist", "uploads"),
+  path.join(projectRoot, "uploads"),
+  path.join(projectRoot, "src", "uploads"),
+  path.join(projectRoot, "dist", "uploads"),
 ];
-const uploadsDir = candidateUploads.find((p) => fs.existsSync(p)) || candidateUploads[0];
+const uploadsDir =
+  candidateUploads.find((p) => fs.existsSync(p)) || candidateUploads[0];
 
 app.use("/uploads", express.static(uploadsDir));
 
 routes.forEach((route) => {
-	app.use("/api/v1", route);
+  app.use("/api/v1", route);
 });
 
 app.listen(PORT, () => {
-	console.log(colors.cyan(`TRACESYS Server running on port: ${PORT}`));
+  console.log(colors.cyan(`TRACESYS Server running on port: ${PORT}`));
 });
 
 // testing api
 app.get("/test", (req: Request, res: Response, next: NextFunction) => {
-	res.status(200).json({
-		success: true,
-		message: "API is working",
-	});
+  res.status(200).json({
+    success: true,
+    message: "API is working",
+  });
 });
 
 // unknown route
 app.use((req: Request, res: Response, next: NextFunction) => {
-	const err = new Error(`Route ${req.originalUrl} not found`) as any;
-	err.statusCode = 404;
-	next(err);
+  const err = new Error(`Route ${req.originalUrl} not found`) as any;
+  err.statusCode = 404;
+  next(err);
 });
 app.use(errorHandlerMiddleware);

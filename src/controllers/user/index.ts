@@ -20,8 +20,8 @@ import Section from "@/db/models/section";
 import Requirement from "@/db/models/requirement";
 import { Op } from "sequelize";
 import {
-	accessTokenOptions,
-	refreshTokenOptions,
+	getAccessTokenOptions,
+	getRefreshTokenOptions,
 	sendToken,
 } from "@/utils/jwt";
 import { uploadUserAvatarUpdate, uploadUserAvatar } from "@/utils/image-handler";
@@ -404,8 +404,12 @@ export const refreshTokenController = async (req: Request, res: Response) => {
 
 	req.user = userSession;
 
-	res.cookie("access_token", accessToken, accessTokenOptions);
-	res.cookie("refresh_token", refreshToken, refreshTokenOptions);
+	// Use getter functions to ensure correct cookie configuration
+	const accessOptions = getAccessTokenOptions();
+	const refreshOptions = getRefreshTokenOptions();
+	
+	res.cookie("access_token", accessToken, accessOptions);
+	res.cookie("refresh_token", refreshToken, refreshOptions);
 
 	res.status(StatusCodes.OK).json({ success: true });
 };
