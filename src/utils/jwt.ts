@@ -9,6 +9,7 @@ interface CookieOptions {
 	sameSite: "lax" | "strict" | "none";
 	secure?: boolean;
 	domain?: string;
+	path?: string;
 }
 
 // Helper function to get cookie options with proper configuration
@@ -25,12 +26,24 @@ const getCookieOptions = (maxAge: number): CookieOptions => {
 		httpOnly: true,
 		sameSite,
 		secure,
+		path: "/", // Explicitly set path to root to ensure cookies are accessible across all routes
 	};
 	
 	// Set domain only if explicitly configured and not localhost
 	const cookieDomain = process.env.COOKIE_DOMAIN;
 	if (cookieDomain && cookieDomain !== "localhost" && !cookieDomain.startsWith("127.0.0.1")) {
 		options.domain = cookieDomain;
+	}
+	
+	// Debug logging for cookie options (in development)
+	if (process.env.NODE_ENV !== "production") {
+		console.log("[JWT] Cookie options:", {
+			sameSite,
+			secure,
+			domain: options.domain || "not set",
+			maxAge: `${maxAge / 1000}s`,
+			httpOnly: true,
+		});
 	}
 	
 	return options;
@@ -61,6 +74,22 @@ export const sendToken = (user: User, statusCode: number, res: Response) => {
 	// Use getter functions to ensure fresh options with correct configuration
 	const accessOptions = getAccessTokenOptions();
 	const refreshOptions = getRefreshTokenOptions();
+
+	// Debug logging (in development)
+	if (process.env.NODE_ENV !== "production") {
+		console.log("[JWT] Setting cookies for user:", {
+			userId: user.id,
+			email: user.email,
+			accessTokenLength: accessToken.length,
+			refreshTokenLength: refreshToken.length,
+			accessOptions: {
+				sameSite: accessOptions.sameSite,
+				secure: accessOptions.secure,
+				domain: accessOptions.domain || "not set",
+				maxAge: `${accessOptions.maxAge / 1000}s`,
+			},
+		});
+	}
 
 	res.cookie("access_token", accessToken, accessOptions);
 	res.cookie("refresh_token", refreshToken, refreshOptions);
