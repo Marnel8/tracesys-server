@@ -13,6 +13,7 @@ import {
 } from "@/data/invitation";
 import { createStudentFromOAuth } from "@/data/student";
 import { UserRole } from "@/db/models/user";
+import "dotenv/config";
 
 // OAuth State parameter interface
 interface OAuthState {
@@ -32,7 +33,9 @@ const getOAuth2Client = () => {
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
     process.env.GOOGLE_REDIRECT_URI ||
-      `${process.env.API_URL || "http://localhost:5001"}/api/v1/auth/google/callback`
+      `${
+        process.env.API_URL || "http://localhost:5001"
+      }/api/v1/auth/google/callback`
   );
   return oauth2Client;
 };
@@ -311,8 +314,12 @@ export const handleGoogleOAuthCallback = async (
         // Create instructor user
         const instructor = await User.create({
           email: googleUser.email,
-          firstName: googleUser.given_name || googleUser.name?.split(" ")[0] || "",
-          lastName: googleUser.family_name || googleUser.name?.split(" ").slice(1).join(" ") || "",
+          firstName:
+            googleUser.given_name || googleUser.name?.split(" ")[0] || "",
+          lastName:
+            googleUser.family_name ||
+            googleUser.name?.split(" ").slice(1).join(" ") ||
+            "",
           password: null,
           role: UserRole.INSTRUCTOR,
           avatar: googleUser.picture || "",
@@ -395,4 +402,3 @@ export const handleGoogleOAuthCallback = async (
     );
   }
 };
-

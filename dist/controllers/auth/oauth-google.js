@@ -11,6 +11,7 @@ const user_1 = __importDefault(require("../../db/models/user.js"));
 const invitation_1 = require("../../data/invitation.js");
 const student_1 = require("../../data/student.js");
 const user_2 = require("../../db/models/user.js");
+require("dotenv/config");
 // Initialize OAuth2 client
 const getOAuth2Client = () => {
     if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
@@ -230,7 +231,9 @@ const handleGoogleOAuthCallback = async (req, res) => {
                 const instructor = await user_1.default.create({
                     email: googleUser.email,
                     firstName: googleUser.given_name || googleUser.name?.split(" ")[0] || "",
-                    lastName: googleUser.family_name || googleUser.name?.split(" ").slice(1).join(" ") || "",
+                    lastName: googleUser.family_name ||
+                        googleUser.name?.split(" ").slice(1).join(" ") ||
+                        "",
                     password: null,
                     role: user_2.UserRole.INSTRUCTOR,
                     avatar: googleUser.picture || "",
