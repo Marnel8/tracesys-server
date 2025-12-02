@@ -24,15 +24,14 @@ const getCookieOptions = (maxAge: number): CookieOptions => {
     options.secure = true;
   }
 
-  // Debug logging for cookie options (in development)
-  if (process.env.NODE_ENV !== "production") {
-    console.log("[JWT] Cookie options:", {
-      sameSite: options.sameSite,
-      secure: options.secure,
-      maxAge: `${maxAge / 1000}s`,
-      httpOnly: options.httpOnly,
-    });
-  }
+  // Debug logging for cookie options
+  console.log("[JWT] Cookie options:", {
+    sameSite: options.sameSite,
+    secure: options.secure,
+    maxAge: `${maxAge / 1000}s`,
+    httpOnly: options.httpOnly,
+    env: process.env.NODE_ENV,
+  });
 
   return options;
 };
@@ -59,20 +58,20 @@ export const sendToken = (user: User, statusCode: number, res: Response) => {
   const accessOptions = getAccessTokenOptions();
   const refreshOptions = getRefreshTokenOptions();
 
-  // Debug logging (in development)
-  if (process.env.NODE_ENV !== "production") {
-    console.log("[JWT] Setting cookies for user:", {
-      userId: user.id,
-      email: user.email,
-      accessTokenLength: accessToken.length,
-      refreshTokenLength: refreshToken.length,
-      accessOptions: {
-        sameSite: accessOptions.sameSite,
-        secure: accessOptions.secure,
-        maxAge: `${accessOptions.maxAge / 1000}s`,
-      },
-    });
-  }
+  // Debug logging
+  console.log("[JWT] Setting cookies for user:", {
+    userId: user.id,
+    email: user.email,
+    accessTokenLength: accessToken.length,
+    refreshTokenLength: refreshToken.length,
+    accessOptions: {
+      sameSite: accessOptions.sameSite,
+      secure: accessOptions.secure,
+      maxAge: `${accessOptions.maxAge / 1000}s`,
+      path: "/",
+    },
+    env: process.env.NODE_ENV,
+  });
 
   res.cookie("access_token", accessToken, accessOptions);
   res.cookie("refresh_token", refreshToken, refreshOptions);

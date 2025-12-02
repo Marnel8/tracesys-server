@@ -41,6 +41,7 @@
     "dotenv": "^16.4.5",
     "ejs": "^3.1.10",
     "express": "^5.0.0",
+    "googleapis": "^166.0.0",
     "http-status-codes": "^2.3.0",
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",

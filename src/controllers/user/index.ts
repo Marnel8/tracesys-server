@@ -444,12 +444,19 @@ export const refreshTokenController = async (req: Request, res: Response) => {
 
 export const logoutController = async (req: Request, res: Response) => {
   try {
-    // Clear cookies with the same options used to set them
-    const accessOptions = getAccessTokenOptions();
-    const refreshOptions = getRefreshTokenOptions();
+    // Clear cookies with matching options (but without expires/maxAge as those are for setting)
+    const isProd = process.env.NODE_ENV === "production";
+    const clearOptions = {
+      httpOnly: true,
+      sameSite: isProd ? ("none" as const) : ("lax" as const),
+      secure: isProd,
+      path: "/",
+    };
 
-    res.clearCookie("access_token", accessOptions);
-    res.clearCookie("refresh_token", refreshOptions);
+    console.log("[Logout] Clearing cookies with options:", clearOptions);
+
+    res.clearCookie("access_token", clearOptions);
+    res.clearCookie("refresh_token", clearOptions);
 
     res.status(StatusCodes.OK).json({
       success: true,

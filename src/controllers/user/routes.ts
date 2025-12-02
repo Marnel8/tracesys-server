@@ -13,6 +13,10 @@ import {
 	updateAllowLoginWithoutRequirementsController,
 } from ".";
 import { handleOAuthCallback } from "../auth/oauth-callback";
+import {
+	initiateGoogleOAuth,
+	handleGoogleOAuthCallback,
+} from "../auth/oauth-google";
 import upload from "@/utils/uploader";
 import { uploadUserAvatarUpdate, uploadUserAvatar } from "@/utils/image-handler";
 import { isAuthenticated } from "@/middlewares/auth";
@@ -40,7 +44,11 @@ router.put("/user/allow-login-without-requirements", isAuthenticated, updateAllo
 // Edit user
 router.put("/user/:id", isAuthenticated, uploadUserAvatarUpdate, editUserController);
 
-// OAuth callback
+// OAuth routes
+router.get("/auth/google", initiateGoogleOAuth);
+router.get("/auth/google/callback", handleGoogleOAuthCallback);
+
+// OAuth callback (legacy - for NextAuth compatibility during migration)
 router.post("/auth/oauth-callback", handleOAuthCallback);
 
 export default router;
