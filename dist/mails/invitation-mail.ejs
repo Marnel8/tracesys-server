@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invitation to Join TracèSys</title>
+    <style>
+        :root {
+            --primary-50: #f5f3ff;
+            --primary-75: #efe9ff;
+            --primary-100: #e5dcff;
+            --primary-500: #8b5cf6;
+            --primary-600: #7c3aed;
+            --primary-700: #5b21b6;
+            --text-strong: #0f172a;
+            --text-muted: #4c4f6b;
+            --border: #e4e2f7;
+            --brand-gradient: linear-gradient(120deg, #7c3aed, #a855f7, #c084fc);
+        }
+        body {
+            font-family: "Inter", "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+            background: linear-gradient(135deg, #fdf9ff 0%, #ffffff 30%, #f1f5ff 100%);
+            margin: 0;
+            padding: 28px 14px;
+            color: var(--text-strong);
+        }
+        .shell {
+            max-width: 700px;
+            margin: 0 auto;
+            padding: 10px;
+        }
+        .card {
+            background: #ffffff;
+            border-radius: 32px;
+            border: 1px solid var(--border);
+            box-shadow: 0 25px 55px rgba(15, 23, 42, 0.08);
+        }
+        .pill-pill {
+            background: #f7edff;
+            border: 1px solid rgba(124, 58, 237, 0.15);
+            border-radius: 999px;
+            padding: 10px 22px;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--primary-700);
+        }
+        .detail-card {
+            border: 1px solid var(--border);
+            border-radius: 24px;
+        }
+        .info-card {
+            border: 1px solid rgba(124, 58, 237, 0.12);
+            border-radius: 22px;
+            box-shadow: 0 12px 30px rgba(124, 58, 237, 0.08);
+        }
+        .cta-button {
+            display: inline-block;
+            padding: 18px 42px;
+            border-radius: 999px;
+            background-color: #7c3aed;
+            background-image: var(--brand-gradient);
+            background-repeat: no-repeat;
+            background-size: 200% 200%;
+            color: #ffffff !important;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 16px;
+            letter-spacing: 0.02em;
+            box-shadow: 0 25px 55px rgba(124, 58, 237, 0.35);
+        }
+        @media (max-width: 600px) {
+            .hero-card,
+            .content-card,
+            .cta-card {
+                padding: 38px;
+                border-radius: 24px;
+            }
+        }
+        @media (prefers-color-scheme: dark) {
+            body {
+                background: #0b1120;
+            }
+            .hero-card,
+            .content-card,
+            .cta-card {
+                background: #111830;
+                border-color: rgba(255, 255, 255, 0.08);
+                box-shadow: none;
+            }
+            p,
+            .detail-value,
+            .steps-card,
+            .footer {
+                color: rgba(255, 255, 255, 0.85);
+            }
+            .pill {
+                background: rgba(124, 58, 237, 0.18);
+                color: #ede9fe;
+            }
+        }
+    </style>
+</head>
+<body>
+    <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="border-collapse:collapse;">
+        <tr>
+            <td align="center">
+                <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="max-width:700px; border-collapse:separate; border-spacing:0 16px;">
+                    <tr>
+                        <td>
+                            <table width="100%" cellpadding="0" cellspacing="0" role="presentation" class="card" style="border-color: rgba(124,58,237,0.25); background: linear-gradient(145deg, rgba(124,58,237,0.05), rgba(255,255,255,0.95));">
+                                <tr>
+                                    <td style="padding:36px 34px;">
+                                        <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="border-collapse:collapse;">
+                                            <tr>
+                                                <td width="72" valign="top" style="padding-right:16px;">
+                                                    <img src="cid:logo" alt="TracèSys logo" width="60" height="60" style="display:block; border-radius:18px; border:1px solid rgba(124,58,237,0.18);" />
+                                                </td>
+                                                <td valign="top">
+                                                    <span style="display:inline-block; padding:6px 18px; border-radius:999px; background:rgba(124,58,237,0.12); color:var(--primary-700); font-size:11px; font-weight:600; letter-spacing:0.24em; text-transform:uppercase;">TracèSys invitation</span>
+                                                    <h1 style="font-size:32px; margin:12px 0 6px; line-height:1.25; color:var(--text-strong);">You’re invited to join as a <strong style="color:var(--primary-700);"><%= role %></strong></h1>
+                                                    <p style="margin:0; color:var(--text-muted); line-height:1.6;">Accept the invite to unlock onboarding, dashboards, and practicum coordination. We’ll guide you through Google sign-in using the email on this invite.</p>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                        <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin-top:16px; border-collapse:collapse;">
+                                            <tr>
+                                                <td width="50%" style="padding:6px 10px;" align="right">
+                                                    <span class="pill-pill">Sent to <%= email %></span>
+                                                </td>
+                                                <td width="50%" style="padding:6px 10px;" align="left">
+                                                    <span class="pill-pill">Expires in <%= expiresInDays %> day(s)</span>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <table width="100%" cellpadding="0" cellspacing="0" role="presentation" class="card">
+                                <tr>
+                                    <td style="padding:36px 34px 32px;">
+                                        <h2 style="font-size:22px; margin:0 0 8px; color:var(--text-strong);">Review &amp; accept</h2>
+                                        <p style="margin:0 0 22px; color:var(--text-muted);">Make sure the details look right before continuing.</p>
+                                        <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="border-collapse:separate; border-spacing:0;">
+                                            <tr>
+                                                <td style="background:var(--primary-75); border:1px dashed var(--border); border-radius:24px; padding:20px 24px;">
+                                                    <p style="margin:0; line-height:1.6; color:var(--text-muted);">This invite is linked to <strong style="color:var(--text-strong);"><%= email %></strong>. Sign in with Google to connect it instantly.</p>
+                                                </td>
+                                            </tr>
+                                        </table>
+
+                                        <% const hasAssignmentDetails = departmentName || sectionName || program || departmentId || sectionId; %>
+                                        <% if (hasAssignmentDetails) { %>
+                                        <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin-top:20px; border-collapse:collapse;">
+                                            <tr>
+                                                <td style="font-weight:600; color:var(--text-strong); padding-bottom:10px;">Assignment summary</td>
+                                            </tr>
+                                            <% if (departmentName || departmentId) { %>
+                                            <tr>
+                                                <td style="padding-bottom:10px;">
+                                                    <table width="100%" cellpadding="0" cellspacing="0" role="presentation" class="detail-card">
+                                                        <tr>
+                                                            <td style="padding:14px 18px;">
+                                                                <div style="font-size:11px; letter-spacing:0.16em; text-transform:uppercase; color:var(--text-muted); margin-bottom:4px;">Department</div>
+                                                                <div style="font-size:16px; font-weight:600; color:var(--text-strong);"><%= departmentName || departmentId || "Not assigned" %></div>
+                                                            </td>
+                                                        </tr>
+                                                    </table>
+                                                </td>
+                                            </tr>
+                                            <% } %>
+                                            <% if (sectionName || sectionId) { %>
+                                            <tr>
+                                                <td style="padding-bottom:10px;">
+                                                    <table width="100%" cellpadding="0" cellspacing="0" role="presentation" class="detail-card">
+                                                        <tr>
+                                                            <td style="padding:14px 18px;">
+                                                                <div style="font-size:11px; letter-spacing:0.16em; text-transform:uppercase; color:var(--text-muted); margin-bottom:4px;">Section</div>
+                                                                <div style="font-size:16px; font-weight:600; color:var(--text-strong);"><%= sectionName || sectionId || "Not assigned" %></div>
+                                                            </td>
+                                                        </tr>
+                                                    </table>
+                                                </td>
+                                            </tr>
+                                            <% } %>
+                                            <% if (program) { %>
+                                            <tr>
+                                                <td style="padding-bottom:10px;">
+                                                    <table width="100%" cellpadding="0" cellspacing="0" role="presentation" class="detail-card">
+                                                        <tr>
+                                                            <td style="padding:14px 18px;">
+                                                                <div style="font-size:11px; letter-spacing:0.16em; text-transform:uppercase; color:var(--text-muted); margin-bottom:4px;">Program</div>
+                                                                <div style="font-size:16px; font-weight:600; color:var(--text-strong);"><%= program %></div>
+                                                            </td>
+                                                        </tr>
+                                                    </table>
+                                                </td>
+                                            </tr>
+                                            <% } %>
+                                        </table>
+                                        <% } %>
+
+                                        <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin-top:22px; border-collapse:separate; border-spacing:0 12px;">
+                                            <tr>
+                                                <td>
+                                                    <table width="100%" cellpadding="0" cellspacing="0" role="presentation" class="info-card">
+                                                        <tr>
+                                                            <td style="padding:18px 22px;">
+                                                                <strong style="display:block; margin-bottom:4px; color:var(--text-strong);">Security note</strong>
+                                                                <span style="color:var(--text-muted); font-size:14px; line-height:1.5;">Your invite token is stored securely so only you can complete onboarding.</span>
+                                                            </td>
+                                                        </tr>
+                                                    </table>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td>
+                                                    <table width="100%" cellpadding="0" cellspacing="0" role="presentation" class="info-card">
+                                                        <tr>
+                                                            <td style="padding:18px 22px;">
+                                                                <strong style="display:block; margin-bottom:4px; color:var(--text-strong);">Need assistance?</strong>
+                                                                <span style="color:var(--text-muted); font-size:14px; line-height:1.5;">Reply to this email or message your coordinator if any detail looks off.</span>
+                                                            </td>
+                                                        </tr>
+                                                    </table>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <table width="100%" cellpadding="0" cellspacing="0" role="presentation" class="card">
+                                <tr>
+                                    <td style="padding:32px;" align="center">
+                                        <a class="cta-button" href="<%= invitationUrl %>">Accept invitation &amp; sign in</a>
+                                        <p style="margin:16px 0 0; font-size:13px; color:var(--text-muted); line-height:1.5;">
+                                            Having trouble with the button? Copy and paste this link:<br />
+                                            <a class="fallback-link" href="<%= invitationUrl %>" style="color:var(--primary-600); text-decoration:underline; word-break:break-all;"><%= invitationUrl %></a>
+                                        </p>
+                                        <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin-top:24px; border:1px dashed var(--border); border-radius:24px; background:rgba(124,58,237,0.05);">
+                                            <tr>
+                                                <td style="padding:24px;">
+                                                    <p style="margin:0 0 8px; font-weight:600; color:var(--text-strong);">What happens next?</p>
+                                                    <ol style="margin:0; padding-left:18px; color:var(--text-muted); line-height:1.6;">
+                                                        <li>Click the button above.</li>
+                                                        <li>Sign in with your Google account.</li>
+                                                        <li>Complete onboarding in just a few minutes.</li>
+                                                    </ol>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                        <div class="footer" style="margin-top:16px; text-align:center; font-size:13px; color:var(--text-muted);">
+                                            <p style="margin:0;">Need help? Reach out to your coordinator or the TracèSys admin desk.</p>
+                                            <p style="margin-top:10px;"><small>If you didn’t expect this invitation, you can safely ignore it.</small></p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

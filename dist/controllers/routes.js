@@ -1,0 +1,21 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.routes = void 0;
+const routes_1 = __importDefault(require("./user/routes.js"));
+const routes_2 = __importDefault(require("./student/routes.js"));
+const routes_3 = __importDefault(require("./agency/routes.js"));
+const routes_4 = __importDefault(require("./department/routes.js"));
+const routes_5 = __importDefault(require("./course/routes.js"));
+const routes_6 = __importDefault(require("./section/routes.js"));
+const routes_7 = __importDefault(require("./announcement/routes.js"));
+const routes_8 = __importDefault(require("./requirement-template/routes.js"));
+const routes_9 = __importDefault(require("./requirement/routes.js"));
+const routes_10 = __importDefault(require("./attendance/routes.js"));
+const routes_11 = __importDefault(require("./report/routes.js"));
+const routes_12 = __importDefault(require("./audit/routes.js"));
+const routes_13 = __importDefault(require("./invitation/routes.js"));
+const routes_14 = __importDefault(require("./practicum/routes.js"));
+exports.routes = [routes_1.default, routes_2.default, routes_3.default, routes_4.default, routes_5.default, routes_6.default, routes_7.default, routes_8.default, routes_9.default, routes_10.default, routes_11.default, routes_12.default, routes_13.default, routes_14.default];

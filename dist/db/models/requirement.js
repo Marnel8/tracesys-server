@@ -1,0 +1,144 @@
+"use strict";
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const sequelize_typescript_1 = require("sequelize-typescript");
+const user_1 = __importDefault(require("./user.js"));
+const requirement_template_1 = __importDefault(require("./requirement-template.js"));
+const requirement_comment_1 = __importDefault(require("./requirement-comment.js"));
+const practicum_1 = __importDefault(require("./practicum.js"));
+let Requirement = class Requirement extends sequelize_typescript_1.Model {
+};
+__decorate([
+    (0, sequelize_typescript_1.Column)({
+        type: sequelize_typescript_1.DataType.UUID,
+        primaryKey: true,
+        defaultValue: sequelize_typescript_1.DataType.UUIDV4,
+    }),
+    __metadata("design:type", String)
+], Requirement.prototype, "id", void 0);
+__decorate([
+    (0, sequelize_typescript_1.ForeignKey)(() => user_1.default),
+    (0, sequelize_typescript_1.Column)({ type: sequelize_typescript_1.DataType.UUID, allowNull: false }),
+    __metadata("design:type", String)
+], Requirement.prototype, "studentId", void 0);
+__decorate([
+    (0, sequelize_typescript_1.ForeignKey)(() => requirement_template_1.default),
+    (0, sequelize_typescript_1.Column)({ type: sequelize_typescript_1.DataType.UUID, allowNull: true }),
+    __metadata("design:type", String)
+], Requirement.prototype, "templateId", void 0);
+__decorate([
+    (0, sequelize_typescript_1.ForeignKey)(() => practicum_1.default),
+    (0, sequelize_typescript_1.Column)({ type: sequelize_typescript_1.DataType.UUID, allowNull: true }),
+    __metadata("design:type", String)
+], Requirement.prototype, "practicumId", void 0);
+__decorate([
+    (0, sequelize_typescript_1.Column)({ type: sequelize_typescript_1.DataType.STRING, allowNull: false }),
+    __metadata("design:type", String)
+], Requirement.prototype, "title", void 0);
+__decorate([
+    (0, sequelize_typescript_1.Column)({ type: sequelize_typescript_1.DataType.TEXT, allowNull: false }),
+    __metadata("design:type", String)
+], Requirement.prototype, "description", void 0);
+__decorate([
+    (0, sequelize_typescript_1.Column)({
+        type: sequelize_typescript_1.DataType.ENUM("health", "reports", "training", "academic", "evaluation", "legal"),
+        allowNull: false,
+    }),
+    __metadata("design:type", String)
+], Requirement.prototype, "category", void 0);
+__decorate([
+    (0, sequelize_typescript_1.Column)({
+        type: sequelize_typescript_1.DataType.ENUM("pending", "submitted", "approved", "rejected", "in-progress"),
+        allowNull: false,
+        defaultValue: "pending",
+    }),
+    __metadata("design:type", String)
+], Requirement.prototype, "status", void 0);
+__decorate([
+    (0, sequelize_typescript_1.Column)({
+        type: sequelize_typescript_1.DataType.ENUM("urgent", "high", "medium", "low"),
+        allowNull: false,
+        defaultValue: "medium",
+    }),
+    __metadata("design:type", String)
+], Requirement.prototype, "priority", void 0);
+__decorate([
+    (0, sequelize_typescript_1.Column)({ type: sequelize_typescript_1.DataType.DATE, allowNull: true }),
+    __metadata("design:type", Date)
+], Requirement.prototype, "dueDate", void 0);
+__decorate([
+    (0, sequelize_typescript_1.Column)({ type: sequelize_typescript_1.DataType.DATE, allowNull: true }),
+    __metadata("design:type", Date)
+], Requirement.prototype, "submittedDate", void 0);
+__decorate([
+    (0, sequelize_typescript_1.Column)({ type: sequelize_typescript_1.DataType.DATE, allowNull: true }),
+    __metadata("design:type", Date)
+], Requirement.prototype, "approvedDate", void 0);
+__decorate([
+    (0, sequelize_typescript_1.ForeignKey)(() => user_1.default),
+    (0, sequelize_typescript_1.Column)({ type: sequelize_typescript_1.DataType.UUID, allowNull: true }),
+    __metadata("design:type", String)
+], Requirement.prototype, "approvedBy", void 0);
+__decorate([
+    (0, sequelize_typescript_1.Column)({ type: sequelize_typescript_1.DataType.TEXT, allowNull: true }),
+    __metadata("design:type", String)
+], Requirement.prototype, "feedback", void 0);
+__decorate([
+    (0, sequelize_typescript_1.Column)({ type: sequelize_typescript_1.DataType.STRING, allowNull: true }),
+    __metadata("design:type", String)
+], Requirement.prototype, "fileUrl", void 0);
+__decorate([
+    (0, sequelize_typescript_1.Column)({ type: sequelize_typescript_1.DataType.STRING, allowNull: true }),
+    __metadata("design:type", String)
+], Requirement.prototype, "fileName", void 0);
+__decorate([
+    (0, sequelize_typescript_1.Column)({ type: sequelize_typescript_1.DataType.INTEGER, allowNull: true }),
+    __metadata("design:type", Number)
+], Requirement.prototype, "fileSize", void 0);
+__decorate([
+    sequelize_typescript_1.CreatedAt,
+    __metadata("design:type", Date)
+], Requirement.prototype, "createdAt", void 0);
+__decorate([
+    sequelize_typescript_1.UpdatedAt,
+    __metadata("design:type", Date)
+], Requirement.prototype, "updatedAt", void 0);
+__decorate([
+    (0, sequelize_typescript_1.BelongsTo)(() => user_1.default, "studentId"),
+    __metadata("design:type", user_1.default)
+], Requirement.prototype, "student", void 0);
+__decorate([
+    (0, sequelize_typescript_1.BelongsTo)(() => requirement_template_1.default, "templateId"),
+    __metadata("design:type", requirement_template_1.default)
+], Requirement.prototype, "template", void 0);
+__decorate([
+    (0, sequelize_typescript_1.BelongsTo)(() => practicum_1.default, "practicumId"),
+    __metadata("design:type", practicum_1.default)
+], Requirement.prototype, "practicum", void 0);
+__decorate([
+    (0, sequelize_typescript_1.BelongsTo)(() => user_1.default, "approvedBy"),
+    __metadata("design:type", user_1.default)
+], Requirement.prototype, "approver", void 0);
+__decorate([
+    (0, sequelize_typescript_1.HasMany)(() => requirement_comment_1.default, "requirementId"),
+    __metadata("design:type", Array)
+], Requirement.prototype, "comments", void 0);
+Requirement = __decorate([
+    (0, sequelize_typescript_1.Table)({
+        tableName: "requirements",
+        timestamps: true,
+        modelName: "Requirement",
+    })
+], Requirement);
+exports.default = Requirement;
