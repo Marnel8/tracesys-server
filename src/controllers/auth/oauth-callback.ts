@@ -127,7 +127,9 @@ export const handleOAuthCallback = async (req: Request, res: Response) => {
   if (existingUser) {
     // Check if user is active
     if (!existingUser.isActive) {
-      throw new UnauthorizedError("Your account has been deactivated. Please contact your administrator.");
+      throw new UnauthorizedError(
+        "Your account has been deactivated. Please contact your administrator."
+      );
     }
 
     // User exists - mark invitation as used if provided and return user
