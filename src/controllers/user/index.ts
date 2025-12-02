@@ -444,8 +444,12 @@ export const refreshTokenController = async (req: Request, res: Response) => {
 
 export const logoutController = async (req: Request, res: Response) => {
   try {
-    res.clearCookie("access_token");
-    res.clearCookie("refresh_token");
+    // Clear cookies with the same options used to set them
+    const accessOptions = getAccessTokenOptions();
+    const refreshOptions = getRefreshTokenOptions();
+
+    res.clearCookie("access_token", accessOptions);
+    res.clearCookie("refresh_token", refreshOptions);
 
     res.status(StatusCodes.OK).json({
       success: true,
