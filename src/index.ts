@@ -23,10 +23,7 @@ app.set("trust proxy", 1);
 
 app.use(
   cors({
-    origin:
-      process.env.NODE_ENV === "production"
-        ? "https://tracesys.mvsoftwares.space"
-        : "http://localhost:3000",
+    origin: "https://tracesys.mvsoftwares.space",
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allowedHeaders: ["Content-Type", "Authorization", "Cookie"],
@@ -56,6 +53,8 @@ app.listen(PORT, () => {
 
 // testing api
 app.get("/test", (req: Request, res: Response, next: NextFunction) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  console.log(res.getHeaderNames());
   res.status(200).json({
     success: true,
     message: "API is working",
