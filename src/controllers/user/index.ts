@@ -444,13 +444,22 @@ export const refreshTokenController = async (req: Request, res: Response) => {
 
 export const logoutController = async (req: Request, res: Response) => {
   try {
-    // Clear cookies with matching options (but without expires/maxAge as those are for setting)
+    // Clear cookies with matching options (must match the options used when setting cookies)
+    // IMPORTANT: Must include domain if cookies were set with a domain
     const isProd = process.env.NODE_ENV === "production";
+
+    // Use the same domain logic as when setting cookies
+    const cookieDomain = isProd
+      ? ".mvsoftwares.space" // Leading dot makes it accessible to all subdomains
+      : undefined; // In development, don't set domain to allow localhost
+
     const clearOptions = {
       httpOnly: true,
       sameSite: isProd ? ("none" as const) : ("lax" as const),
       secure: isProd,
       path: "/",
+      // Include domain if it was set when creating cookies
+      ...(cookieDomain ? { domain: cookieDomain } : {}),
     };
 
     console.log("[Logout] Clearing cookies with options:", clearOptions);
