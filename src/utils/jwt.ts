@@ -9,7 +9,7 @@ interface CookieOptions {
   sameSite: "lax" | "strict" | "none";
   secure: boolean;
   path: string;
-  domain: string;
+  domain?: string; // Optional - undefined allows cookies on current domain (localhost in dev)
 }
 
 const API_DOMAIN = "tracesys-api.mvsoftwares.space";
@@ -20,6 +20,13 @@ const API_DOMAIN = "tracesys-api.mvsoftwares.space";
 const getCookieOptions = (maxAge: number): CookieOptions => {
   const isProd = process.env.NODE_ENV === "production";
 
+  // For cross-subdomain cookie sharing, use the parent domain with a leading dot
+  // This makes cookies accessible on all subdomains (tracesys.mvsoftwares.space, tracesys-api.mvsoftwares.space, etc.)
+  // In development, don't set domain (or use localhost) to allow local development
+  const cookieDomain = isProd
+    ? ".mvsoftwares.space" // Leading dot makes it accessible to all subdomains
+    : undefined; // In development, don't set domain to allow localhost
+
   return {
     expires: new Date(Date.now() + maxAge),
     maxAge,
@@ -27,7 +34,8 @@ const getCookieOptions = (maxAge: number): CookieOptions => {
     sameSite: isProd ? "none" : "lax",
     secure: isProd, // MUST be true in production
     path: "/", // REQUIRED for cross-site cookies
-    domain: API_DOMAIN, // REQUIRED for cross-domain persistence
+    // Only set domain in production - in dev, undefined allows localhost
+    ...(cookieDomain ? { domain: cookieDomain } : {}),
   };
 };
 
