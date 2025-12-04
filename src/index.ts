@@ -25,7 +25,7 @@ app.use(
   cors({
     origin: [
       "http://localhost:3000",
-      "https://tracesys.vercel.app",
+      "https://tracesys.mvsoftwares.space",
       process.env.CLIENT_URL,
     ].filter(Boolean) as string[],
     credentials: true,
