@@ -20,11 +20,11 @@ app.use(express_1.default.json({ limit: "50mb" }));
 app.use((0, cookie_parser_1.default)());
 app.set("trust proxy", 1);
 app.use((0, cors_1.default)({
-    origin: "https://tracesys.mvsoftwares.space",
+    origin: process.env.NODE_ENV === "production"
+        ? "https://tracesys.mvsoftwares.space"
+        : "http://localhost:3000",
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-    allowedHeaders: ["Content-Type", "Authorization", "Cookie"],
-    exposedHeaders: ["Set-Cookie"],
 }));
 // Resolve uploads directory for both dev (src) and prod (dist) without relying on __dirname
 const projectRoot = process.cwd();
