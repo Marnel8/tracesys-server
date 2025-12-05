@@ -12,6 +12,7 @@ const invitation_1 = require("../../data/invitation.js");
 const send_mail_1 = __importDefault(require("../../utils/send-mail.js"));
 const department_1 = __importDefault(require("../../db/models/department.js"));
 const section_1 = __importDefault(require("../../db/models/section.js"));
+require("dotenv/config");
 const departmentNameCache = new Map();
 const sectionNameCache = new Map();
 const projectRoot = process.cwd();

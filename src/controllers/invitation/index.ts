@@ -15,6 +15,7 @@ import {
 import sendMail from "@/utils/send-mail";
 import Department from "@/db/models/department";
 import Section from "@/db/models/section";
+import "dotenv/config";
 
 interface CreateInvitationRequest {
   email: string;
