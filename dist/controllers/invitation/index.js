@@ -44,7 +44,7 @@ const getSectionName = async (id) => {
     return name || undefined;
 };
 const createInvitationController = async (req, res) => {
-    const { email, role, departmentId, sectionId, program, expiresInDays } = req.body;
+    const { email, role, departmentId, sectionId, program, expiresInDays, } = req.body;
     const instructorId = req.user?.id;
     if (!instructorId) {
         throw new error_1.BadRequestError("User not authenticated.");
@@ -65,7 +65,7 @@ const createInvitationController = async (req, res) => {
         expiresInDays,
     });
     // Build invitation URL with embedded IDs
-    const baseUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+    const baseUrl = process.env.CLIENT_URL || "http://localhost:3000";
     const invitationUrl = new URL(`/invitation/accept/${invitation.token}`, baseUrl);
     if (departmentId)
         invitationUrl.searchParams.set("departmentId", departmentId);
@@ -116,7 +116,7 @@ const createInvitationController = async (req, res) => {
 };
 exports.createInvitationController = createInvitationController;
 const createBulkInvitationsController = async (req, res) => {
-    const { emails, role, departmentId, sectionId, program, expiresInDays } = req.body;
+    const { emails, role, departmentId, sectionId, program, expiresInDays, } = req.body;
     const instructorId = req.user?.id;
     if (!instructorId) {
         throw new error_1.BadRequestError("User not authenticated.");
