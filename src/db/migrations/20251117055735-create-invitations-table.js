@@ -2,6 +2,19 @@
 
 module.exports = {
   async up(queryInterface, Sequelize) {
+    // Check if table already exists
+    const [tables] = await queryInterface.sequelize.query(`
+      SELECT TABLE_NAME 
+      FROM information_schema.TABLES 
+      WHERE TABLE_SCHEMA = DATABASE() 
+      AND TABLE_NAME = 'invitations'
+    `);
+
+    if (tables && tables.length > 0) {
+      console.log('Table invitations already exists, skipping creation');
+      return;
+    }
+
     await queryInterface.createTable('invitations', {
       id: {
         type: Sequelize.UUID,
@@ -79,22 +92,27 @@ module.exports = {
       },
     });
 
-    // Create indexes
-    await queryInterface.addIndex('invitations', ['token'], {
-      name: 'idx_invitations_token',
-    });
-    await queryInterface.addIndex('invitations', ['email'], {
-      name: 'idx_invitations_email',
-    });
-    await queryInterface.addIndex('invitations', ['departmentId'], {
-      name: 'idx_invitations_departmentId',
-    });
-    await queryInterface.addIndex('invitations', ['sectionId'], {
-      name: 'idx_invitations_sectionId',
-    });
-    await queryInterface.addIndex('invitations', ['createdBy'], {
-      name: 'idx_invitations_createdBy',
-    });
+    // Create indexes (only if they don't exist)
+    // Note: token already has a unique constraint which creates an index, so we skip it
+    const indexes = [
+      { name: 'idx_invitations_email', fields: ['email'] },
+      { name: 'idx_invitations_departmentId', fields: ['departmentId'] },
+      { name: 'idx_invitations_sectionId', fields: ['sectionId'] },
+      { name: 'idx_invitations_createdBy', fields: ['createdBy'] },
+    ];
+
+    for (const index of indexes) {
+      try {
+        await queryInterface.addIndex('invitations', index.fields, {
+          name: index.name,
+        });
+      } catch (error) {
+        // Index might already exist, ignore the error
+        if (!error.message.includes('Duplicate key name')) {
+          throw error;
+        }
+      }
+    }
   },
 
   async down(queryInterface, Sequelize) {

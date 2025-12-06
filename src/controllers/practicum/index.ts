@@ -13,7 +13,7 @@ import sequelize from "@/db";
 
 interface PracticumPayload {
 	agencyId: string;
-	supervisorId: string;
+	supervisorId?: string;
 	startDate: string;
 	endDate: string;
 	position?: string;
@@ -38,8 +38,8 @@ export const upsertPracticumController = async (req: Request, res: Response) => 
 		workSetup = "On-site",
 	}: PracticumPayload = req.body;
 
-	if (!agencyId || !supervisorId || !startDate || !endDate) {
-		throw new BadRequestError("agencyId, supervisorId, startDate, and endDate are required");
+	if (!agencyId || !startDate || !endDate) {
+		throw new BadRequestError("agencyId, startDate, and endDate are required");
 	}
 
 	const student = await User.findByPk(studentId);
@@ -58,12 +58,15 @@ export const upsertPracticumController = async (req: Request, res: Response) => 
 		throw new NotFoundError("Agency not found");
 	}
 
-	const supervisor = await Supervisor.findOne({
-		where: { id: supervisorId, agencyId },
-	});
+	// Only validate supervisor if provided
+	if (supervisorId) {
+		const supervisor = await Supervisor.findOne({
+			where: { id: supervisorId, agencyId },
+		});
 
-	if (!supervisor) {
-		throw new NotFoundError("Supervisor not found for the selected agency");
+		if (!supervisor) {
+			throw new NotFoundError("Supervisor not found for the selected agency");
+		}
 	}
 
 	const transaction: Transaction = await sequelize.transaction();
@@ -93,10 +96,9 @@ export const upsertPracticumController = async (req: Request, res: Response) => 
 			transaction,
 		});
 
-		const payload = {
+		const payload: any = {
 			studentId,
 			agencyId,
-			supervisorId,
 			sectionId: enrollment.sectionId,
 			courseId: course?.id || enrollment.section.courseId || null,
 			departmentId: course?.departmentId || null,
@@ -106,6 +108,7 @@ export const upsertPracticumController = async (req: Request, res: Response) => 
 			totalHours: Number(totalHours) || 400,
 			workSetup,
 			status: "active" as const,
+			supervisorId: supervisorId || null, // Allow null to remove supervisor
 		};
 
 		let practicum: Practicum;

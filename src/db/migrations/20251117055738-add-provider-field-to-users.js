@@ -2,6 +2,20 @@
 
 module.exports = {
   async up(queryInterface, Sequelize) {
+    // Check if column already exists
+    const [columns] = await queryInterface.sequelize.query(`
+      SELECT COLUMN_NAME 
+      FROM information_schema.COLUMNS 
+      WHERE TABLE_SCHEMA = DATABASE() 
+      AND TABLE_NAME = 'users' 
+      AND COLUMN_NAME = 'provider'
+    `);
+
+    if (columns && columns.length > 0) {
+      console.log('Column provider already exists in users table, skipping');
+      return;
+    }
+
     await queryInterface.addColumn('users', 'provider', {
       type: Sequelize.STRING,
       allowNull: true,
@@ -9,7 +23,18 @@ module.exports = {
   },
 
   async down(queryInterface, Sequelize) {
-    await queryInterface.removeColumn('users', 'provider');
+    // Check if column exists before removing
+    const [columns] = await queryInterface.sequelize.query(`
+      SELECT COLUMN_NAME 
+      FROM information_schema.COLUMNS 
+      WHERE TABLE_SCHEMA = DATABASE() 
+      AND TABLE_NAME = 'users' 
+      AND COLUMN_NAME = 'provider'
+    `);
+
+    if (columns && columns.length > 0) {
+      await queryInterface.removeColumn('users', 'provider');
+    }
   }
 };
 

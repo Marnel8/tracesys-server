@@ -883,8 +883,8 @@ __decorate([
 ], Practicum.prototype, "agencyId", void 0);
 __decorate([
     (0, sequelize_typescript_1.ForeignKey)(() => Supervisor),
-    (0, sequelize_typescript_1.Column)({ type: sequelize_typescript_1.DataType.UUID, allowNull: false }),
-    __metadata("design:type", String)
+    (0, sequelize_typescript_1.Column)({ type: sequelize_typescript_1.DataType.UUID, allowNull: true }),
+    __metadata("design:type", Object)
 ], Practicum.prototype, "supervisorId", void 0);
 __decorate([
     (0, sequelize_typescript_1.ForeignKey)(() => Section),

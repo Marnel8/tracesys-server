@@ -53,8 +53,8 @@ const upsertPracticumController = async (req, res) => {
         throw new error_1.UnauthorizedError("User not authenticated");
     }
     const { agencyId, supervisorId, startDate, endDate, position = "Student Intern", totalHours = 400, workSetup = "On-site", } = req.body;
-    if (!agencyId || !supervisorId || !startDate || !endDate) {
-        throw new error_1.BadRequestError("agencyId, supervisorId, startDate, and endDate are required");
+    if (!agencyId || !startDate || !endDate) {
+        throw new error_1.BadRequestError("agencyId, startDate, and endDate are required");
     }
     const student = await user_1.default.findByPk(studentId);
     if (!student) {
@@ -67,11 +67,14 @@ const upsertPracticumController = async (req, res) => {
     if (!agency) {
         throw new error_1.NotFoundError("Agency not found");
     }
-    const supervisor = await supervisor_1.default.findOne({
-        where: { id: supervisorId, agencyId },
-    });
-    if (!supervisor) {
-        throw new error_1.NotFoundError("Supervisor not found for the selected agency");
+    // Only validate supervisor if provided
+    if (supervisorId) {
+        const supervisor = await supervisor_1.default.findOne({
+            where: { id: supervisorId, agencyId },
+        });
+        if (!supervisor) {
+            throw new error_1.NotFoundError("Supervisor not found for the selected agency");
+        }
     }
     const transaction = await db_1.default.transaction();
     try {
@@ -98,7 +101,6 @@ const upsertPracticumController = async (req, res) => {
         const payload = {
             studentId,
             agencyId,
-            supervisorId,
             sectionId: enrollment.sectionId,
             courseId: course?.id || enrollment.section.courseId || null,
             departmentId: course?.departmentId || null,
@@ -108,6 +110,7 @@ const upsertPracticumController = async (req, res) => {
             totalHours: Number(totalHours) || 400,
             workSetup,
             status: "active",
+            supervisorId: supervisorId || null, // Allow null to remove supervisor
         };
         let practicum;
         if (existingPracticum) {

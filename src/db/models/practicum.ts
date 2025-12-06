@@ -41,8 +41,8 @@ export default class Practicum extends Model {
 	declare agencyId: string;
 
 	@ForeignKey(() => Supervisor)
-	@Column({ type: DataType.UUID, allowNull: false })
-	declare supervisorId: string;
+	@Column({ type: DataType.UUID, allowNull: true })
+	declare supervisorId: string | null;
 
 	@ForeignKey(() => Section)
 	@Column({ type: DataType.UUID, allowNull: true })
