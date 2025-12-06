@@ -50,8 +50,11 @@ let User = class User extends sequelize_typescript_1.Model {
         }
     }
     static async hashPasswordOnUpdate(instance) {
-        if (instance.password && instance.password !== "" && instance.changed('password')) {
-            if (!instance.password.startsWith('$2a$') && !instance.password.startsWith('$2b$')) {
+        if (instance.password &&
+            instance.password !== "" &&
+            instance.changed("password")) {
+            if (!instance.password.startsWith("$2a$") &&
+                !instance.password.startsWith("$2b$")) {
                 instance.password = await bcryptjs_1.default.hash(instance.password, 10);
             }
         }
@@ -137,7 +140,7 @@ __decorate([
     __metadata("design:type", String)
 ], User.prototype, "provider", void 0);
 __decorate([
-    (0, sequelize_typescript_1.Column)({ type: sequelize_typescript_1.DataType.STRING, allowNull: true }),
+    (0, sequelize_typescript_1.Column)({ type: sequelize_typescript_1.DataType.TEXT, allowNull: true }),
     __metadata("design:type", String)
 ], User.prototype, "avatar", void 0);
 __decorate([
@@ -226,7 +229,11 @@ __decorate([
     __metadata("design:type", Date)
 ], User.prototype, "updatedAt", void 0);
 __decorate([
-    (0, sequelize_typescript_1.BelongsTo)(() => department_1.default, { foreignKey: "departmentId", onDelete: "SET NULL", onUpdate: "CASCADE" }),
+    (0, sequelize_typescript_1.BelongsTo)(() => department_1.default, {
+        foreignKey: "departmentId",
+        onDelete: "SET NULL",
+        onUpdate: "CASCADE",
+    }),
     __metadata("design:type", department_1.default)
 ], User.prototype, "department", void 0);
 __decorate([

@@ -120,7 +120,7 @@ __decorate([
     __metadata("design:type", String)
 ], User.prototype, "gender", void 0);
 __decorate([
-    (0, sequelize_typescript_1.Column)({ type: sequelize_typescript_1.DataType.STRING, allowNull: true }),
+    (0, sequelize_typescript_1.Column)({ type: sequelize_typescript_1.DataType.TEXT, allowNull: true }),
     __metadata("design:type", String)
 ], User.prototype, "avatar", void 0);
 __decorate([

@@ -90,7 +90,7 @@ export class User extends Model {
 	})
 	declare gender: Gender;
 
-	@Column({ type: DataType.STRING, allowNull: true })
+	@Column({ type: DataType.TEXT, allowNull: true })
 	declare avatar: string;
 
 	@Column({ type: DataType.TEXT, allowNull: true })
