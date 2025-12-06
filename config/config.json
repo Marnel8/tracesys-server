@@ -4,20 +4,23 @@
     "password": "12345678",
     "database": "tracesys_db",
     "host": "127.0.0.1",
-    "dialect": "mysql"
+    "dialect": "mysql",
+    "port": 3306
   },
   "test": {
     "username": "root",
-    "password": 12345678,
+    "password": "12345678",
     "database": "tracesys_db",
     "host": "127.0.0.1",
-    "dialect": "mysql"
+    "dialect": "mysql",
+    "port": 3306
   },
   "production": {
-    "username": "root",
-    "password": 12345678,
+    "username": "tracesysadmin",
+    "password": "Tracesys@2025",
     "database": "tracesys_db",
-    "host": "127.0.0.1",
-    "dialect": "mysql"
+    "host": "localhost",
+    "dialect": "mysql",
+    "port": 3306
   }
 }

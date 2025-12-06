@@ -16,9 +16,9 @@
     "seed:requirements": "tsx -r tsconfig-paths/register -e \"import { seedRequirementTemplates } from './seeders/requirement-templates'; import sequelize from './src/db'; sequelize.authenticate().then(() => seedRequirementTemplates()).finally(() => sequelize.close());\"",
     "seed:departments": "tsx -r tsconfig-paths/register -e \"import { seedDepartments } from './seeders/index'; import sequelize from './src/db'; sequelize.authenticate().then(() => seedDepartments()).finally(() => sequelize.close());\"",
     "seed:departments:cjs": "tsx -r tsconfig-paths/register seeders/departments-cjs.ts",
-    "migration:generate": "sequelize-cli migration:generate --migrations-path src/db/migrations --config config/config.json",
-    "migration:up": "sequelize-cli db:migrate --migrations-path src/db/migrations --config config/config.json",
-    "migration:down": "sequelize-cli db:migrate:undo --migrations-path src/db/migrations --config config/config.json"
+    "migration:generate": "sequelize-cli migration:generate --migrations-path src/db/migrations --config config/config.js",
+    "migration:up": "sequelize-cli db:migrate --migrations-path src/db/migrations --config config/config.js",
+    "migration:down": "sequelize-cli db:migrate:undo --migrations-path src/db/migrations --config config/config.js"
   },
   "author": "TraceSys",
   "license": "ISC",
