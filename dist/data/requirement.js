@@ -33,20 +33,125 @@ const getRequirementsData = async (params) => {
     const { page, limit, search, status, studentId, practicumId, instructorId } = params;
     const offset = (page - 1) * limit;
     const where = {};
+    const andConditions = [];
     if (search) {
-        where[sequelize_1.Op.or] = [
-            { title: { [sequelize_1.Op.like]: `%${search}%` } },
-            { description: { [sequelize_1.Op.like]: `%${search}%` } },
-        ];
+        andConditions.push({
+            [sequelize_1.Op.or]: [
+                { title: { [sequelize_1.Op.like]: `%${search}%` } },
+                { description: { [sequelize_1.Op.like]: `%${search}%` } },
+                { fileName: { [sequelize_1.Op.like]: `%${search}%` } },
+                { "$student.firstName$": { [sequelize_1.Op.like]: `%${search}%` } },
+                { "$student.lastName$": { [sequelize_1.Op.like]: `%${search}%` } },
+                { "$student.email$": { [sequelize_1.Op.like]: `%${search}%` } },
+                { "$student.studentId$": { [sequelize_1.Op.like]: `%${search}%` } },
+            ],
+        });
     }
     if (status && status !== "all") {
         where.status = status;
+    }
+    else if (status === "all" && instructorId) {
+        // When status is "all" and user is instructor, only show requirements with files
+        // This ensures pagination works correctly (no empty pages)
+        andConditions.push({
+            [sequelize_1.Op.or]: [
+                { fileUrl: { [sequelize_1.Op.ne]: null } },
+                { fileName: { [sequelize_1.Op.ne]: null } },
+            ],
+        });
+    }
+    // Combine all AND conditions
+    if (andConditions.length > 0) {
+        where[sequelize_1.Op.and] = andConditions;
     }
     if (studentId) {
         where.studentId = studentId;
     }
     if (practicumId) {
         where.practicumId = practicumId;
+    }
+    // Ensure students under this instructor have requirement rows for all active templates
+    if (instructorId) {
+        const [enrollments, templates] = await Promise.all([
+            student_enrollment_1.default.findAll({
+                attributes: ["studentId"],
+                include: [
+                    {
+                        model: section_1.default,
+                        as: "section",
+                        attributes: [],
+                        where: { instructorId },
+                        required: true,
+                    },
+                ],
+                raw: true,
+            }),
+            requirement_template_1.default.findAll({
+                where: { isActive: true },
+                raw: true,
+            }),
+        ]);
+        const studentIds = Array.from(new Set(enrollments
+            .map((e) => e.studentId)
+            .filter((id) => !!id)));
+        const templateIds = templates.map((t) => t.id).filter(Boolean);
+        if (studentIds.length && templateIds.length) {
+            const existing = await requirement_1.default.findAll({
+                attributes: ["id", "studentId", "templateId", "createdAt"],
+                where: {
+                    studentId: { [sequelize_1.Op.in]: studentIds },
+                    templateId: { [sequelize_1.Op.in]: templateIds },
+                },
+                raw: true,
+            });
+            // Deduplicate legacy rows: keep the newest per (studentId, templateId)
+            if (existing.length > 0) {
+                const seen = new Map();
+                const toDelete = [];
+                for (const row of existing) {
+                    const key = `${row.studentId}:${row.templateId}`;
+                    const createdAt = new Date(row.createdAt);
+                    if (!seen.has(key)) {
+                        seen.set(key, { id: row.id, createdAt });
+                        continue;
+                    }
+                    const current = seen.get(key);
+                    // Keep the newest record, delete the older one
+                    if (createdAt > current.createdAt) {
+                        toDelete.push(current.id);
+                        seen.set(key, { id: row.id, createdAt });
+                    }
+                    else {
+                        toDelete.push(row.id);
+                    }
+                }
+                if (toDelete.length) {
+                    await requirement_1.default.destroy({ where: { id: { [sequelize_1.Op.in]: toDelete } } });
+                }
+            }
+            const existingSet = new Set(existing.map((r) => `${r.studentId}:${r.templateId}`));
+            const toCreate = [];
+            for (const sid of studentIds) {
+                for (const tmpl of templates) {
+                    const key = `${sid}:${tmpl.id}`;
+                    if (existingSet.has(key))
+                        continue;
+                    toCreate.push({
+                        studentId: sid,
+                        templateId: tmpl.id,
+                        title: tmpl.title,
+                        description: tmpl.description,
+                        category: tmpl.category,
+                        priority: tmpl.priority,
+                        status: "pending",
+                        dueDate: null,
+                    });
+                }
+            }
+            if (toCreate.length) {
+                await requirement_1.default.bulkCreate(toCreate);
+            }
+        }
     }
     const { count, rows } = await requirement_1.default.findAndCountAll({
         where,

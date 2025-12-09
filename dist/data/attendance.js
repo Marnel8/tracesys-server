@@ -135,52 +135,12 @@ const checkOperatingDay = (agency, date) => {
 };
 exports.checkOperatingDay = checkOperatingDay;
 // Helper function to check if time is within operating hours for a session
+// Note: Time-based restrictions are handled by the frontend, which marks late/early clock-ins in remarks.
+// This function now allows all clock-ins regardless of time, as early and late clock-ins are permitted.
 const checkOperatingHours = (agency, currentTime, sessionType) => {
-    if (!agency)
-        return { valid: true }; // If no agency data, allow
-    const currentHour = currentTime.getHours();
-    const currentMinute = currentTime.getMinutes();
-    const currentTimeMinutes = currentHour * 60 + currentMinute;
-    // Parse time strings (format: "HH:MM:SS" or "HH:MM")
-    const parseTime = (timeStr) => {
-        if (!timeStr)
-            return null;
-        const parts = timeStr.split(":");
-        if (parts.length < 2)
-            return null;
-        return parseInt(parts[0]) * 60 + parseInt(parts[1]);
-    };
-    const openingTime = parseTime(agency.openingTime);
-    const closingTime = parseTime(agency.closingTime);
-    const lunchStartTime = parseTime(agency.lunchStartTime);
-    const lunchEndTime = parseTime(agency.lunchEndTime);
-    if (sessionType === "morning") {
-        if (!openingTime)
-            return { valid: true }; // No opening time restriction
-        const morningEndTime = lunchStartTime || closingTime || openingTime + 240; // Default 4 hours if no lunch/closing
-        if (currentTimeMinutes < openingTime) {
-            return { valid: false, message: `Morning clock-in is only allowed after ${agency.openingTime}` };
-        }
-        if (lunchStartTime && currentTimeMinutes >= lunchStartTime) {
-            return { valid: false, message: `Morning clock-in must be before lunch time (${agency.lunchStartTime})` };
-        }
-        if (closingTime && currentTimeMinutes > closingTime) {
-            return { valid: false, message: `Clock-in time is after closing time (${agency.closingTime})` };
-        }
-    }
-    else if (sessionType === "afternoon") {
-        if (!lunchEndTime && !closingTime)
-            return { valid: true };
-        const afternoonStartTime = lunchEndTime || (lunchStartTime ? lunchStartTime + 60 : openingTime ? openingTime + 240 : null);
-        if (!afternoonStartTime)
-            return { valid: true };
-        if (lunchEndTime && currentTimeMinutes < lunchEndTime) {
-            return { valid: false, message: `Afternoon clock-in is only allowed after lunch end time (${agency.lunchEndTime})` };
-        }
-        if (closingTime && currentTimeMinutes >= closingTime) {
-            return { valid: false, message: `Afternoon clock-in must be before closing time (${agency.closingTime})` };
-        }
-    }
+    // Allow all clock-ins regardless of time
+    // The frontend handles time-based logic and marks late/early clock-ins in the remarks field
+    // Operating day validation is handled separately by checkOperatingDay
     return { valid: true };
 };
 exports.checkOperatingHours = checkOperatingHours;

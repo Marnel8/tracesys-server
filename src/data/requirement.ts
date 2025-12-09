@@ -57,20 +57,140 @@ export const getRequirementsData = async (params: GetRequirementsParams) => {
 	const offset = (page - 1) * limit;
 
 	const where: any = {};
+	const andConditions: any[] = [];
+	
 	if (search) {
-		where[Op.or] = [
-			{ title: { [Op.like]: `%${search}%` } },
-			{ description: { [Op.like]: `%${search}%` } },
-		];
+		andConditions.push({
+			[Op.or]: [
+				{ title: { [Op.like]: `%${search}%` } },
+				{ description: { [Op.like]: `%${search}%` } },
+				{ fileName: { [Op.like]: `%${search}%` } },
+				{ "$student.firstName$": { [Op.like]: `%${search}%` } },
+				{ "$student.lastName$": { [Op.like]: `%${search}%` } },
+				{ "$student.email$": { [Op.like]: `%${search}%` } },
+				{ "$student.studentId$": { [Op.like]: `%${search}%` } },
+			],
+		});
 	}
+	
 	if (status && status !== "all") {
 		where.status = status;
+	} else if (status === "all" && instructorId) {
+		// When status is "all" and user is instructor, only show requirements with files
+		// This ensures pagination works correctly (no empty pages)
+		andConditions.push({
+			[Op.or]: [
+				{ fileUrl: { [Op.ne]: null } },
+				{ fileName: { [Op.ne]: null } },
+			],
+		});
+	}
+	
+	// Combine all AND conditions
+	if (andConditions.length > 0) {
+		where[Op.and] = andConditions;
 	}
 	if (studentId) {
 		where.studentId = studentId;
 	}
 	if (practicumId) {
 		where.practicumId = practicumId;
+	}
+
+	// Ensure students under this instructor have requirement rows for all active templates
+		if (instructorId) {
+		const [enrollments, templates] = await Promise.all([
+			StudentEnrollment.findAll({
+				attributes: ["studentId"],
+				include: [
+					{
+						model: Section,
+						as: "section" as any,
+						attributes: [],
+						where: { instructorId },
+						required: true,
+					},
+				],
+				raw: true,
+			}),
+			RequirementTemplate.findAll({
+				where: { isActive: true },
+				raw: true,
+			}),
+		]);
+
+		const studentIds = Array.from(
+			new Set(
+				enrollments
+					.map((e: any) => e.studentId)
+					.filter((id): id is string => !!id)
+			)
+		);
+		const templateIds = templates.map((t: any) => t.id).filter(Boolean);
+
+		if (studentIds.length && templateIds.length) {
+			const existing = await Requirement.findAll({
+				attributes: ["id", "studentId", "templateId", "createdAt"],
+				where: {
+					studentId: { [Op.in]: studentIds },
+					templateId: { [Op.in]: templateIds },
+				},
+				raw: true,
+			});
+
+			// Deduplicate legacy rows: keep the newest per (studentId, templateId)
+			if (existing.length > 0) {
+				const seen = new Map<string, { id: string; createdAt: Date }>();
+				const toDelete: string[] = [];
+
+				for (const row of existing) {
+					const key = `${row.studentId}:${row.templateId}`;
+					const createdAt = new Date(row.createdAt as any);
+					if (!seen.has(key)) {
+						seen.set(key, { id: row.id, createdAt });
+						continue;
+					}
+					const current = seen.get(key)!;
+					// Keep the newest record, delete the older one
+					if (createdAt > current.createdAt) {
+						toDelete.push(current.id);
+						seen.set(key, { id: row.id, createdAt });
+					} else {
+						toDelete.push(row.id);
+					}
+				}
+
+				if (toDelete.length) {
+					await Requirement.destroy({ where: { id: { [Op.in]: toDelete } } });
+				}
+			}
+
+			const existingSet = new Set(
+				existing.map((r: any) => `${r.studentId}:${r.templateId}`)
+			);
+
+			const toCreate: any[] = [];
+			for (const sid of studentIds) {
+				for (const tmpl of templates) {
+					const key = `${sid}:${tmpl.id}`;
+					if (existingSet.has(key)) continue;
+					toCreate.push({
+						studentId: sid,
+						templateId: tmpl.id,
+						title: tmpl.title,
+						description: tmpl.description,
+						category: tmpl.category,
+						priority: tmpl.priority,
+						status: "pending",
+						dueDate: null,
+					});
+				}
+			}
+
+			if (toCreate.length) {
+				await Requirement.bulkCreate(toCreate);
+			}
+		}
 	}
 
 	const { count, rows } = await Requirement.findAndCountAll({

@@ -48,6 +48,7 @@ const practicum_1 = __importDefault(require("../db/models/practicum.js"));
 const requirement_template_1 = __importDefault(require("../db/models/requirement-template.js"));
 const requirement_1 = __importDefault(require("../db/models/requirement.js"));
 const attendance_record_1 = __importDefault(require("../db/models/attendance-record.js"));
+const invitation_1 = __importDefault(require("../db/models/invitation.js"));
 const error_1 = require("../utils/error.js");
 const sequelize_1 = require("sequelize");
 const student_enrollment_1 = __importDefault(require("../db/models/student-enrollment.js"));
@@ -261,7 +262,10 @@ const createStudentData = async (studentData) => {
         }, { transaction: t });
         // Create practicum only if agency information is provided
         let practicum = null;
-        if (studentData.agency && studentData.supervisor && studentData.startDate && studentData.endDate) {
+        if (studentData.agency &&
+            studentData.supervisor &&
+            studentData.startDate &&
+            studentData.endDate) {
             // Find or create agency
             let agencyRecord = await agency_1.default.findOne({
                 where: { name: studentData.agency },
@@ -593,9 +597,9 @@ const getStudentsData = async (params) => {
     });
     return {
         students: students.rows,
-        enrollments: students.rows.map(student => student.enrollments),
-        practicums: students.rows.map(student => student.practicums),
-        requirements: students.rows.map(student => student.requirements),
+        enrollments: students.rows.map((student) => student.enrollments),
+        practicums: students.rows.map((student) => student.practicums),
+        requirements: students.rows.map((student) => student.requirements),
         pagination: {
             currentPage: page,
             totalPages: Math.ceil(students.count / limit),
@@ -636,16 +640,24 @@ const updateStudentData = async (id, studentData) => {
     const updatedStudent = await student.update({
         ...(studentData.firstName && { firstName: studentData.firstName }),
         ...(studentData.lastName && { lastName: studentData.lastName }),
-        ...(studentData.middleName !== undefined && { middleName: studentData.middleName }),
+        ...(studentData.middleName !== undefined && {
+            middleName: studentData.middleName,
+        }),
         ...(studentData.email && { email: studentData.email }),
         ...(studentData.phone && { phone: studentData.phone }),
         ...(studentData.age !== undefined && { age: studentData.age }),
         ...(studentData.gender && { gender: studentData.gender }),
         ...(studentData.avatar !== undefined && { avatar: studentData.avatar }),
-        ...(studentData.studentId !== undefined && { studentId: studentData.studentId }),
-        ...(studentData.address !== undefined && { address: studentData.address }),
+        ...(studentData.studentId !== undefined && {
+            studentId: studentData.studentId,
+        }),
+        ...(studentData.address !== undefined && {
+            address: studentData.address,
+        }),
         ...(studentData.bio !== undefined && { bio: studentData.bio }),
-        ...(studentData.departmentId && { departmentId: studentData.departmentId }),
+        ...(studentData.departmentId && {
+            departmentId: studentData.departmentId,
+        }),
         ...(studentData.yearLevel && { yearLevel: studentData.yearLevel }),
         ...(studentData.program && { program: studentData.program }),
     }, { transaction: t });
@@ -653,19 +665,26 @@ const updateStudentData = async (id, studentData) => {
     if (studentData.sectionId) {
         const enrollment = await student_enrollment_1.default.findOne({
             where: { studentId: id },
-            transaction: t
+            transaction: t,
         });
         if (enrollment) {
             await enrollment.update({ sectionId: studentData.sectionId }, { transaction: t });
         }
     }
     // Update practicum if practicum data is provided
-    if (studentData.agencyId || studentData.supervisorId || studentData.position ||
-        studentData.startDate || studentData.endDate || studentData.totalHours !== undefined ||
-        studentData.workSetup || studentData.sectionId || studentData.courseId || studentData.departmentId) {
+    if (studentData.agencyId ||
+        studentData.supervisorId ||
+        studentData.position ||
+        studentData.startDate ||
+        studentData.endDate ||
+        studentData.totalHours !== undefined ||
+        studentData.workSetup ||
+        studentData.sectionId ||
+        studentData.courseId ||
+        studentData.departmentId) {
         const practicum = await practicum_1.default.findOne({
             where: { studentId: id },
-            transaction: t
+            transaction: t,
         });
         if (practicum) {
             const practicumUpdateData = {};
@@ -690,7 +709,8 @@ const updateStudentData = async (id, studentData) => {
             if (studentData.sectionId)
                 practicumUpdateData.sectionId = studentData.sectionId;
             // Derive courseId/departmentId from sectionId if provided and not explicitly set
-            if (studentData.sectionId && (!studentData.courseId || !studentData.departmentId)) {
+            if (studentData.sectionId &&
+                (!studentData.courseId || !studentData.departmentId)) {
                 const section = await section_1.default.findByPk(studentData.sectionId, {
                     include: [{ model: course_1.default, as: "course" }],
                     transaction: t,
@@ -716,7 +736,8 @@ const updateStudentData = async (id, studentData) => {
                         where: { studentId: id },
                         transaction: t,
                     });
-                    sectionIdToUse = (enrollment && enrollment.sectionId) || null;
+                    sectionIdToUse =
+                        (enrollment && enrollment.sectionId) || null;
                 }
                 // Derive course/department from section if missing
                 if (sectionIdToUse && (!courseIdToUse || !departmentIdToUse)) {
@@ -739,8 +760,12 @@ const updateStudentData = async (id, studentData) => {
                     courseId: courseIdToUse || undefined,
                     departmentId: departmentIdToUse || undefined,
                     position: studentData.position || "Student Intern",
-                    startDate: studentData.startDate ? new Date(studentData.startDate) : undefined,
-                    endDate: studentData.endDate ? new Date(studentData.endDate) : undefined,
+                    startDate: studentData.startDate
+                        ? new Date(studentData.startDate)
+                        : undefined,
+                    endDate: studentData.endDate
+                        ? new Date(studentData.endDate)
+                        : undefined,
                     totalHours: studentData.totalHours ?? 400,
                     completedHours: 0,
                     workSetup: studentData.workSetup || "On-site",
@@ -795,6 +820,45 @@ const getStudentsByTeacherData = async (params) => {
         ];
     }
     try {
+        // Collect sections the instructor owns or has invited students into.
+        const [instructorSections, invitedSections] = await Promise.all([
+            section_1.default.findAll({
+                attributes: ["id"],
+                where: { instructorId: teacherId },
+            }),
+            invitation_1.default.findAll({
+                attributes: ["sectionId"],
+                where: {
+                    createdBy: teacherId,
+                    role: "student",
+                    sectionId: { [sequelize_1.Op.ne]: null },
+                },
+            }),
+        ]);
+        const allowedSectionIds = Array.from(new Set([
+            ...instructorSections.map((s) => s.id),
+            ...invitedSections
+                .map((i) => i.sectionId)
+                .filter((id) => !!id),
+        ]));
+        // If no sections are associated, return an empty result early.
+        if (allowedSectionIds.length === 0) {
+            return {
+                students: [],
+                teacher: {
+                    id: teacher.id,
+                    firstName: teacher.firstName,
+                    lastName: teacher.lastName,
+                    email: teacher.email,
+                },
+                pagination: {
+                    currentPage: page,
+                    totalPages: 0,
+                    totalItems: 0,
+                    itemsPerPage: limit,
+                },
+            };
+        }
         // Query StudentEnrollment with all necessary includes
         const enrollments = await student_enrollment_1.default.findAndCountAll({
             include: [
@@ -834,7 +898,11 @@ const getStudentsByTeacherData = async (params) => {
                 {
                     model: section_1.default,
                     as: "section",
-                    where: { instructorId: teacherId },
+                    where: {
+                        id: {
+                            [sequelize_1.Op.in]: allowedSectionIds,
+                        },
+                    },
                     include: [
                         {
                             model: course_1.default,
@@ -854,14 +922,14 @@ const getStudentsByTeacherData = async (params) => {
             order: [["createdAt", "DESC"]],
         });
         // Get the students from the enrollments
-        const students = enrollments.rows.map(enrollment => {
+        const students = enrollments.rows.map((enrollment) => {
             const student = enrollment.student;
             // Attach enrollment data to student
             student.enrollments = [enrollment];
             return student;
         });
         // Add additional data for each student
-        const enrichedStudents = students.map(student => {
+        const enrichedStudents = students.map((student) => {
             // Get the current enrollment
             const enrollment = student.enrollments?.[0];
             const section = enrollment?.section;
@@ -874,22 +942,26 @@ const getStudentsByTeacherData = async (params) => {
                 sectionName: section?.name || "-",
                 academicYear: section?.academicYear || "-",
                 agencyName: agency?.name || "-",
-                agencyDetails: agency ? {
-                    name: agency.name,
-                    address: agency.address,
-                    contactPerson: agency.contactPerson,
-                    contactPhone: agency.contactPhone,
-                    contactEmail: agency.contactEmail,
-                } : null,
-                practicumDetails: practicum ? {
-                    position: practicum.position,
-                    startDate: practicum.startDate,
-                    endDate: practicum.endDate,
-                    totalHours: practicum.totalHours,
-                    completedHours: practicum.completedHours,
-                    workSetup: practicum.workSetup,
-                    status: practicum.status,
-                } : null,
+                agencyDetails: agency
+                    ? {
+                        name: agency.name,
+                        address: agency.address,
+                        contactPerson: agency.contactPerson,
+                        contactPhone: agency.contactPhone,
+                        contactEmail: agency.contactEmail,
+                    }
+                    : null,
+                practicumDetails: practicum
+                    ? {
+                        position: practicum.position,
+                        startDate: practicum.startDate,
+                        endDate: practicum.endDate,
+                        totalHours: practicum.totalHours,
+                        completedHours: practicum.completedHours,
+                        workSetup: practicum.workSetup,
+                        status: practicum.status,
+                    }
+                    : null,
                 // Placeholder data for future implementation
                 attendance: undefined,
                 requirements: undefined,
@@ -901,7 +973,7 @@ const getStudentsByTeacherData = async (params) => {
                 enrollments: student.enrollments || [],
                 practicums: student.practicums || [],
                 // Add computed fields for easier frontend access
-                computed: computedFields
+                computed: computedFields,
             };
         });
         return {
