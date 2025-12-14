@@ -69,8 +69,16 @@ __decorate([
     __metadata("design:type", Date)
 ], AttendanceRecord.prototype, "afternoonTimeOut", void 0);
 __decorate([
+    (0, sequelize_typescript_1.Column)({ type: sequelize_typescript_1.DataType.DATE, allowNull: true }),
+    __metadata("design:type", Date)
+], AttendanceRecord.prototype, "overtimeTimeIn", void 0);
+__decorate([
+    (0, sequelize_typescript_1.Column)({ type: sequelize_typescript_1.DataType.DATE, allowNull: true }),
+    __metadata("design:type", Date)
+], AttendanceRecord.prototype, "overtimeTimeOut", void 0);
+__decorate([
     (0, sequelize_typescript_1.Column)({
-        type: sequelize_typescript_1.DataType.ENUM("morning", "afternoon", "full_day"),
+        type: sequelize_typescript_1.DataType.ENUM("morning", "afternoon", "full_day", "overtime"),
         allowNull: true,
     }),
     __metadata("design:type", String)
@@ -273,6 +281,10 @@ __decorate([
     (0, sequelize_typescript_1.HasOne)(() => detailed_attendance_log_1.default, "attendanceRecordId"),
     __metadata("design:type", detailed_attendance_log_1.default)
 ], AttendanceRecord.prototype, "detailedLog", void 0);
+__decorate([
+    (0, sequelize_typescript_1.HasMany)(() => detailed_attendance_log_1.default, "attendanceRecordId"),
+    __metadata("design:type", Array)
+], AttendanceRecord.prototype, "detailedLogs", void 0);
 AttendanceRecord = __decorate([
     (0, sequelize_typescript_1.Table)({
         tableName: "attendance_records",

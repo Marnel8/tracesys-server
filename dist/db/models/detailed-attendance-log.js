@@ -32,7 +32,7 @@ __decorate([
 ], DetailedAttendanceLog.prototype, "attendanceRecordId", void 0);
 __decorate([
     (0, sequelize_typescript_1.Column)({
-        type: sequelize_typescript_1.DataType.ENUM("morning", "afternoon"),
+        type: sequelize_typescript_1.DataType.ENUM("morning", "afternoon", "overtime"),
         allowNull: true,
     }),
     __metadata("design:type", String)

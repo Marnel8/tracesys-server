@@ -3,10 +3,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getRequirementStatsData = exports.rejectRequirementData = exports.approveRequirementData = exports.updateRequirementFileData = exports.findRequirementByID = exports.getRequirementsData = exports.createRequirementFromTemplateData = void 0;
+exports.getStudentUnreadCommentsData = exports.getRequirementCommentsData = exports.createRequirementCommentData = exports.getRequirementStatsData = exports.updateRequirementDueDateData = exports.rejectRequirementData = exports.approveRequirementData = exports.updateRequirementFileData = exports.findRequirementByID = exports.getRequirementsData = exports.createRequirementFromTemplateData = void 0;
 const sequelize_1 = require("sequelize");
 const requirement_1 = __importDefault(require("../db/models/requirement.js"));
 const requirement_template_1 = __importDefault(require("../db/models/requirement-template.js"));
+const requirement_comment_1 = __importDefault(require("../db/models/requirement-comment.js"));
 const user_1 = __importDefault(require("../db/models/user.js"));
 const student_enrollment_1 = __importDefault(require("../db/models/student-enrollment.js"));
 const section_1 = __importDefault(require("../db/models/section.js"));
@@ -52,13 +53,17 @@ const getRequirementsData = async (params) => {
     }
     else if (status === "all" && instructorId) {
         // When status is "all" and user is instructor, only show requirements with files
-        // This ensures pagination works correctly (no empty pages)
-        andConditions.push({
-            [sequelize_1.Op.or]: [
-                { fileUrl: { [sequelize_1.Op.ne]: null } },
-                { fileName: { [sequelize_1.Op.ne]: null } },
-            ],
-        });
+        // UNLESS includePending is true (for summary page where we need to see all requirements)
+        // This ensures pagination works correctly (no empty pages) for the requirements list page
+        const includePending = params.includePending;
+        if (!includePending) {
+            andConditions.push({
+                [sequelize_1.Op.or]: [
+                    { fileUrl: { [sequelize_1.Op.ne]: null } },
+                    { fileName: { [sequelize_1.Op.ne]: null } },
+                ],
+            });
+        }
     }
     // Combine all AND conditions
     if (andConditions.length > 0) {
@@ -204,6 +209,14 @@ const findRequirementByID = async (id) => {
             { model: requirement_template_1.default, as: "template" },
             { model: user_1.default, as: "student", attributes: ["id", "firstName", "lastName", "email", "role"] },
             { model: user_1.default, as: "approver", attributes: ["id", "firstName", "lastName", "email", "role"] },
+            {
+                model: requirement_comment_1.default,
+                as: "comments",
+                include: [
+                    { model: user_1.default, as: "user", attributes: ["id", "firstName", "lastName", "email", "role"] },
+                ],
+                order: [["createdAt", "ASC"]],
+            },
         ],
     });
     return req;
@@ -251,6 +264,16 @@ const rejectRequirementData = async (id, approverId, reason) => {
     return req;
 };
 exports.rejectRequirementData = rejectRequirementData;
+const updateRequirementDueDateData = async (id, dueDate) => {
+    const req = await requirement_1.default.findByPk(id);
+    if (!req)
+        throw new Error("Requirement not found");
+    await req.update({
+        dueDate: dueDate,
+    });
+    return req;
+};
+exports.updateRequirementDueDateData = updateRequirementDueDateData;
 const getRequirementStatsData = async (studentId) => {
     try {
         // Get all requirements for the student
@@ -282,3 +305,73 @@ const getRequirementStatsData = async (studentId) => {
     }
 };
 exports.getRequirementStatsData = getRequirementStatsData;
+const createRequirementCommentData = async (requirementId, userId, content, isPrivate = false) => {
+    const requirement = await requirement_1.default.findByPk(requirementId);
+    if (!requirement) {
+        throw new Error("Requirement not found");
+    }
+    const comment = await requirement_comment_1.default.create({
+        requirementId,
+        userId,
+        content,
+        isPrivate,
+    });
+    // Fetch the comment with user information
+    const commentWithUser = await requirement_comment_1.default.findByPk(comment.id, {
+        include: [
+            { model: user_1.default, as: "user", attributes: ["id", "firstName", "lastName", "email", "role"] },
+            { model: requirement_1.default, as: "requirement", attributes: ["id", "title", "studentId"] },
+        ],
+    });
+    return commentWithUser;
+};
+exports.createRequirementCommentData = createRequirementCommentData;
+const getRequirementCommentsData = async (requirementId) => {
+    const requirement = await requirement_1.default.findByPk(requirementId);
+    if (!requirement) {
+        throw new Error("Requirement not found");
+    }
+    const comments = await requirement_comment_1.default.findAll({
+        where: { requirementId, isPrivate: false },
+        include: [
+            { model: user_1.default, as: "user", attributes: ["id", "firstName", "lastName", "email", "role"] },
+        ],
+        order: [["createdAt", "ASC"]],
+    });
+    return comments;
+};
+exports.getRequirementCommentsData = getRequirementCommentsData;
+const getStudentUnreadCommentsData = async (studentId, lastCheckTime) => {
+    // Get all requirements for the student
+    const requirements = await requirement_1.default.findAll({
+        where: { studentId },
+        attributes: ["id"],
+        raw: true,
+    });
+    const requirementIds = requirements.map((r) => r.id);
+    if (requirementIds.length === 0) {
+        return [];
+    }
+    const whereConditions = {
+        requirementId: { [sequelize_1.Op.in]: requirementIds },
+        isPrivate: false,
+    };
+    // If lastCheckTime is provided, only get comments created after that time
+    if (lastCheckTime) {
+        whereConditions.createdAt = { [sequelize_1.Op.gt]: new Date(lastCheckTime) };
+    }
+    const comments = await requirement_comment_1.default.findAll({
+        where: whereConditions,
+        include: [
+            { model: user_1.default, as: "user", attributes: ["id", "firstName", "lastName", "email", "role"] },
+            {
+                model: requirement_1.default,
+                as: "requirement",
+                attributes: ["id", "title", "studentId"],
+            },
+        ],
+        order: [["createdAt", "DESC"]],
+    });
+    return comments;
+};
+exports.getStudentUnreadCommentsData = getStudentUnreadCommentsData;

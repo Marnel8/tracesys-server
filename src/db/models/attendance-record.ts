@@ -8,6 +8,7 @@ import {
 	ForeignKey,
 	BelongsTo,
 	HasOne,
+	HasMany,
 } from "sequelize-typescript";
 import User from "./user";
 import Practicum from "./practicum";
@@ -60,12 +61,19 @@ export default class AttendanceRecord extends Model {
 	@Column({ type: DataType.DATE, allowNull: true })
 	declare afternoonTimeOut: Date;
 
+	// Overtime session fields
+	@Column({ type: DataType.DATE, allowNull: true })
+	declare overtimeTimeIn: Date;
+
+	@Column({ type: DataType.DATE, allowNull: true })
+	declare overtimeTimeOut: Date;
+
 	// Session type for legacy records
 	@Column({
-		type: DataType.ENUM("morning", "afternoon", "full_day"),
+		type: DataType.ENUM("morning", "afternoon", "full_day", "overtime"),
 		allowNull: true,
 	})
-	declare sessionType: "morning" | "afternoon" | "full_day";
+	declare sessionType: "morning" | "afternoon" | "full_day" | "overtime";
 
 	@Column({ type: DataType.FLOAT, allowNull: true })
 	declare hours: number;
@@ -230,6 +238,7 @@ export default class AttendanceRecord extends Model {
 	declare detailedLog: DetailedAttendanceLog;
 
 	// Support multiple detailed logs (one per session)
+	@HasMany(() => DetailedAttendanceLog, "attendanceRecordId")
 	declare detailedLogs?: DetailedAttendanceLog[];
 }
 

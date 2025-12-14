@@ -16,7 +16,7 @@ interface CreateRequirementTemplateParams {
 	title: string;
 	description: string;
 	category: RequirementCategory;
-	priority: RequirementPriority;
+	priority?: RequirementPriority; // Optional, defaults to "medium" in database
 	isRequired: boolean;
 	instructions?: string | null;
 	allowedFileTypes?: string[] | null; // will be stored as CSV in TEXT field
@@ -54,6 +54,7 @@ export const createRequirementTemplateData = async (
 
 		const template = await RequirementTemplate.create({
 			...data,
+			priority: data.priority || "medium", // Default to "medium" if not provided
 			allowedFileTypes: data.allowedFileTypes?.join(",") ?? null,
 		} as any);
 

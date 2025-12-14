@@ -23,6 +23,11 @@
             margin: 0;
             padding: 28px 14px;
             color: var(--text-strong);
+            -webkit-text-size-adjust: 100%;
+            -ms-text-size-adjust: 100%;
+        }
+        * {
+            box-sizing: border-box;
         }
         .shell {
             max-width: 700px;
@@ -68,12 +73,84 @@
             letter-spacing: 0.02em;
             box-shadow: 0 25px 55px rgba(124, 58, 237, 0.35);
         }
+        .mobile-stack {
+            display: block !important;
+            width: 100% !important;
+        }
+        .mobile-center {
+            text-align: center !important;
+        }
         @media (max-width: 600px) {
-            .hero-card,
-            .content-card,
-            .cta-card {
-                padding: 38px;
-                border-radius: 24px;
+            body {
+                padding: 8px 4px !important;
+            }
+            .card {
+                border-radius: 16px !important;
+            }
+            .mobile-padding {
+                padding: 20px 16px !important;
+            }
+            .mobile-padding-sm {
+                padding: 14px 12px !important;
+            }
+            .mobile-h1 {
+                font-size: 22px !important;
+                line-height: 1.3 !important;
+                word-wrap: break-word !important;
+            }
+            .mobile-h2 {
+                font-size: 17px !important;
+            }
+            .mobile-text {
+                font-size: 13px !important;
+                word-wrap: break-word !important;
+            }
+            .mobile-pill {
+                display: block !important;
+                width: 100% !important;
+                max-width: 100% !important;
+                margin-bottom: 8px !important;
+                text-align: center !important;
+                box-sizing: border-box !important;
+                word-wrap: break-word !important;
+                word-break: break-word !important;
+            }
+            .mobile-logo {
+                display: block !important;
+                margin: 0 auto 12px !important;
+                max-width: 100% !important;
+            }
+            .mobile-logo-cell {
+                display: block !important;
+                width: 100% !important;
+                max-width: 100% !important;
+                text-align: center !important;
+            }
+            .mobile-button {
+                display: block !important;
+                width: 100% !important;
+                max-width: 100% !important;
+                padding: 14px 20px !important;
+                font-size: 14px !important;
+                text-align: center !important;
+                box-sizing: border-box !important;
+            }
+            .mobile-full-width {
+                width: 100% !important;
+                max-width: 100% !important;
+            }
+            .mobile-stack {
+                display: block !important;
+                width: 100% !important;
+                max-width: 100% !important;
+            }
+            table {
+                max-width: 100% !important;
+                width: 100% !important;
+            }
+            td {
+                word-wrap: break-word !important;
+                word-break: break-word !important;
             }
         }
         @media (prefers-color-scheme: dark) {
@@ -104,31 +181,31 @@
     <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="border-collapse:collapse;">
         <tr>
             <td align="center">
-                <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="max-width:700px; border-collapse:separate; border-spacing:0 16px;">
+                <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="max-width:700px; width:100%; border-collapse:separate; border-spacing:0 16px; box-sizing:border-box;">
                     <tr>
                         <td>
                             <table width="100%" cellpadding="0" cellspacing="0" role="presentation" class="card" style="border-color: rgba(124,58,237,0.25); background: linear-gradient(145deg, rgba(124,58,237,0.05), rgba(255,255,255,0.95));">
                                 <tr>
-                                    <td style="padding:36px 34px;">
-                                        <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="border-collapse:collapse;">
+                                    <td class="mobile-padding" style="padding:36px 34px;">
+                                        <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="border-collapse:collapse; max-width:100%;">
                                             <tr>
-                                                <td width="72" valign="top" style="padding-right:16px;">
-                                                    <img src="cid:logo" alt="TracèSys logo" width="60" height="60" style="display:block; border-radius:18px; border:1px solid rgba(124,58,237,0.18);" />
+                                                <td class="mobile-logo-cell" width="72" valign="top" style="padding-right:16px; max-width:72px;">
+                                                    <img src="cid:logo" alt="TracèSys logo" width="60" height="60" class="mobile-logo" style="display:block; border-radius:18px; border:1px solid rgba(124,58,237,0.18); max-width:100%; height:auto;" />
                                                 </td>
-                                                <td valign="top">
-                                                    <span style="display:inline-block; padding:6px 18px; border-radius:999px; background:rgba(124,58,237,0.12); color:var(--primary-700); font-size:11px; font-weight:600; letter-spacing:0.24em; text-transform:uppercase;">TracèSys invitation</span>
-                                                    <h1 style="font-size:32px; margin:12px 0 6px; line-height:1.25; color:var(--text-strong);">You’re invited to join as a <strong style="color:var(--primary-700);"><%= role %></strong></h1>
-                                                    <p style="margin:0; color:var(--text-muted); line-height:1.6;">Accept the invite to unlock onboarding, dashboards, and practicum coordination. We’ll guide you through Google sign-in using the email on this invite.</p>
+                                                <td class="mobile-logo-cell" valign="top" style="width:100%; max-width:100%; word-wrap:break-word; word-break:break-word;">
+                                                    <span style="display:inline-block; padding:6px 18px; border-radius:999px; background:rgba(124,58,237,0.12); color:var(--primary-700); font-size:11px; font-weight:600; letter-spacing:0.24em; text-transform:uppercase; word-wrap:break-word; word-break:break-word;">TracèSys invitation</span>
+                                                    <h1 class="mobile-h1" style="font-size:32px; margin:12px 0 6px; line-height:1.25; color:var(--text-strong); word-wrap:break-word; word-break:break-word;">You're invited to join as a <strong style="color:var(--primary-700);"><%= role %></strong></h1>
+                                                    <p class="mobile-text" style="margin:0; color:var(--text-muted); line-height:1.6; font-size:15px; word-wrap:break-word; word-break:break-word;">Accept the invite to unlock onboarding, dashboards, and practicum coordination. We'll guide you through Google sign-in using the email on this invite.</p>
                                                 </td>
                                             </tr>
                                         </table>
                                         <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin-top:16px; border-collapse:collapse;">
                                             <tr>
-                                                <td width="50%" style="padding:6px 10px;" align="right">
-                                                    <span class="pill-pill">Sent to <%= email %></span>
+                                                <td class="mobile-stack mobile-center" width="50%" style="padding:4px 8px; padding-bottom:8px;" align="right">
+                                                    <span class="pill-pill mobile-pill" style="display:inline-block; padding:8px 16px; border-radius:999px; background:#f7edff; border:1px solid rgba(124,58,237,0.15); font-size:12px; font-weight:600; color:var(--primary-700); word-wrap:break-word; word-break:break-word; max-width:100%; box-sizing:border-box;">Sent to <%= email %></span>
                                                 </td>
-                                                <td width="50%" style="padding:6px 10px;" align="left">
-                                                    <span class="pill-pill">Expires in <%= expiresInDays %> day(s)</span>
+                                                <td class="mobile-stack mobile-center" width="50%" style="padding:4px 8px;" align="left">
+                                                    <span class="pill-pill mobile-pill" style="display:inline-block; padding:8px 16px; border-radius:999px; background:#f7edff; border:1px solid rgba(124,58,237,0.15); font-size:12px; font-weight:600; color:var(--primary-700); word-wrap:break-word; word-break:break-word; max-width:100%; box-sizing:border-box;">Expires in <%= expiresInDays %> day(s)</span>
                                                 </td>
                                             </tr>
                                         </table>
@@ -141,13 +218,13 @@
                         <td>
                             <table width="100%" cellpadding="0" cellspacing="0" role="presentation" class="card">
                                 <tr>
-                                    <td style="padding:36px 34px 32px;">
-                                        <h2 style="font-size:22px; margin:0 0 8px; color:var(--text-strong);">Review &amp; accept</h2>
-                                        <p style="margin:0 0 22px; color:var(--text-muted);">Make sure the details look right before continuing.</p>
-                                        <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="border-collapse:separate; border-spacing:0;">
+                                    <td class="mobile-padding" style="padding:36px 34px 32px;">
+                                        <h2 class="mobile-h2" style="font-size:22px; margin:0 0 8px; color:var(--text-strong);">Review &amp; accept</h2>
+                                        <p class="mobile-text" style="margin:0 0 22px; color:var(--text-muted); font-size:15px;">Make sure the details look right before continuing.</p>
+                                        <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="border-collapse:separate; border-spacing:0; max-width:100%;">
                                             <tr>
-                                                <td style="background:var(--primary-75); border:1px dashed var(--border); border-radius:24px; padding:20px 24px;">
-                                                    <p style="margin:0; line-height:1.6; color:var(--text-muted);">This invite is linked to <strong style="color:var(--text-strong);"><%= email %></strong>. Sign in with Google to connect it instantly.</p>
+                                                <td class="mobile-padding-sm" style="background:var(--primary-75); border:1px dashed var(--border); border-radius:24px; padding:20px 24px; word-wrap:break-word; word-break:break-word; max-width:100%; box-sizing:border-box;">
+                                                    <p class="mobile-text" style="margin:0; line-height:1.6; color:var(--text-muted); font-size:14px; word-wrap:break-word; word-break:break-word;">This invite is linked to <strong style="color:var(--text-strong); word-wrap:break-word; word-break:break-word;"><%= email %></strong>. Sign in with Google to connect it instantly.</p>
                                                 </td>
                                             </tr>
                                         </table>
@@ -163,9 +240,9 @@
                                                 <td style="padding-bottom:10px;">
                                                     <table width="100%" cellpadding="0" cellspacing="0" role="presentation" class="detail-card">
                                                         <tr>
-                                                            <td style="padding:14px 18px;">
+                                                            <td class="mobile-padding-sm" style="padding:14px 18px;">
                                                                 <div style="font-size:11px; letter-spacing:0.16em; text-transform:uppercase; color:var(--text-muted); margin-bottom:4px;">Department</div>
-                                                                <div style="font-size:16px; font-weight:600; color:var(--text-strong);"><%= departmentName || departmentId || "Not assigned" %></div>
+                                                                <div class="mobile-text" style="font-size:16px; font-weight:600; color:var(--text-strong);"><%= departmentName || departmentId || "Not assigned" %></div>
                                                             </td>
                                                         </tr>
                                                     </table>
@@ -177,9 +254,9 @@
                                                 <td style="padding-bottom:10px;">
                                                     <table width="100%" cellpadding="0" cellspacing="0" role="presentation" class="detail-card">
                                                         <tr>
-                                                            <td style="padding:14px 18px;">
+                                                            <td class="mobile-padding-sm" style="padding:14px 18px;">
                                                                 <div style="font-size:11px; letter-spacing:0.16em; text-transform:uppercase; color:var(--text-muted); margin-bottom:4px;">Section</div>
-                                                                <div style="font-size:16px; font-weight:600; color:var(--text-strong);"><%= sectionName || sectionId || "Not assigned" %></div>
+                                                                <div class="mobile-text" style="font-size:16px; font-weight:600; color:var(--text-strong);"><%= sectionName || sectionId || "Not assigned" %></div>
                                                             </td>
                                                         </tr>
                                                     </table>
@@ -191,9 +268,9 @@
                                                 <td style="padding-bottom:10px;">
                                                     <table width="100%" cellpadding="0" cellspacing="0" role="presentation" class="detail-card">
                                                         <tr>
-                                                            <td style="padding:14px 18px;">
+                                                            <td class="mobile-padding-sm" style="padding:14px 18px;">
                                                                 <div style="font-size:11px; letter-spacing:0.16em; text-transform:uppercase; color:var(--text-muted); margin-bottom:4px;">Program</div>
-                                                                <div style="font-size:16px; font-weight:600; color:var(--text-strong);"><%= program %></div>
+                                                                <div class="mobile-text" style="font-size:16px; font-weight:600; color:var(--text-strong);"><%= program %></div>
                                                             </td>
                                                         </tr>
                                                     </table>
@@ -208,9 +285,9 @@
                                                 <td>
                                                     <table width="100%" cellpadding="0" cellspacing="0" role="presentation" class="info-card">
                                                         <tr>
-                                                            <td style="padding:18px 22px;">
+                                                            <td class="mobile-padding-sm" style="padding:18px 22px;">
                                                                 <strong style="display:block; margin-bottom:4px; color:var(--text-strong);">Security note</strong>
-                                                                <span style="color:var(--text-muted); font-size:14px; line-height:1.5;">Your invite token is stored securely so only you can complete onboarding.</span>
+                                                                <span class="mobile-text" style="color:var(--text-muted); font-size:14px; line-height:1.5;">Your invite token is stored securely so only you can complete onboarding.</span>
                                                             </td>
                                                         </tr>
                                                     </table>
@@ -220,9 +297,9 @@
                                                 <td>
                                                     <table width="100%" cellpadding="0" cellspacing="0" role="presentation" class="info-card">
                                                         <tr>
-                                                            <td style="padding:18px 22px;">
+                                                            <td class="mobile-padding-sm" style="padding:18px 22px;">
                                                                 <strong style="display:block; margin-bottom:4px; color:var(--text-strong);">Need assistance?</strong>
-                                                                <span style="color:var(--text-muted); font-size:14px; line-height:1.5;">Reply to this email or message your coordinator if any detail looks off.</span>
+                                                                <span class="mobile-text" style="color:var(--text-muted); font-size:14px; line-height:1.5;">Reply to this email or message your coordinator if any detail looks off.</span>
                                                             </td>
                                                         </tr>
                                                     </table>
@@ -238,17 +315,17 @@
                         <td>
                             <table width="100%" cellpadding="0" cellspacing="0" role="presentation" class="card">
                                 <tr>
-                                    <td style="padding:32px;" align="center">
-                                        <a class="cta-button" href="<%= invitationUrl %>">Accept invitation &amp; sign in</a>
-                                        <p style="margin:16px 0 0; font-size:13px; color:var(--text-muted); line-height:1.5;">
+                                    <td class="mobile-padding" style="padding:32px;" align="center">
+                                        <a class="cta-button mobile-button" href="<%= invitationUrl %>" style="display:inline-block; padding:18px 42px; border-radius:999px; background-color:#7c3aed; background-image:var(--brand-gradient); background-repeat:no-repeat; background-size:200% 200%; color:#ffffff !important; text-decoration:none; font-weight:600; font-size:16px; letter-spacing:0.02em; box-shadow:0 25px 55px rgba(124,58,237,0.35); max-width:100%; box-sizing:border-box; word-wrap:break-word; word-break:break-word;">Accept invitation &amp; sign in</a>
+                                        <p class="mobile-text" style="margin:16px 0 0; font-size:13px; color:var(--text-muted); line-height:1.5; word-wrap:break-word; word-break:break-word;">
                                             Having trouble with the button? Copy and paste this link:<br />
-                                            <a class="fallback-link" href="<%= invitationUrl %>" style="color:var(--primary-600); text-decoration:underline; word-break:break-all;"><%= invitationUrl %></a>
+                                            <a class="fallback-link" href="<%= invitationUrl %>" style="color:var(--primary-600); text-decoration:underline; word-break:break-all; word-wrap:break-word; max-width:100%;"><%= invitationUrl %></a>
                                         </p>
                                         <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin-top:24px; border:1px dashed var(--border); border-radius:24px; background:rgba(124,58,237,0.05);">
                                             <tr>
-                                                <td style="padding:24px;">
-                                                    <p style="margin:0 0 8px; font-weight:600; color:var(--text-strong);">What happens next?</p>
-                                                    <ol style="margin:0; padding-left:18px; color:var(--text-muted); line-height:1.6;">
+                                                <td class="mobile-padding-sm" style="padding:24px;">
+                                                    <p class="mobile-text" style="margin:0 0 8px; font-weight:600; color:var(--text-strong); font-size:15px;">What happens next?</p>
+                                                    <ol class="mobile-text" style="margin:0; padding-left:18px; color:var(--text-muted); line-height:1.6; font-size:14px;">
                                                         <li>Click the button above.</li>
                                                         <li>Sign in with your Google account.</li>
                                                         <li>Complete onboarding in just a few minutes.</li>
@@ -256,9 +333,9 @@
                                                 </td>
                                             </tr>
                                         </table>
-                                        <div class="footer" style="margin-top:16px; text-align:center; font-size:13px; color:var(--text-muted);">
+                                        <div class="footer mobile-text" style="margin-top:16px; text-align:center; font-size:13px; color:var(--text-muted);">
                                             <p style="margin:0;">Need help? Reach out to your coordinator or the TracèSys admin desk.</p>
-                                            <p style="margin-top:10px;"><small>If you didn’t expect this invitation, you can safely ignore it.</small></p>
+                                            <p style="margin-top:10px;"><small>If you didn't expect this invitation, you can safely ignore it.</small></p>
                                         </div>
                                     </td>
                                 </tr>

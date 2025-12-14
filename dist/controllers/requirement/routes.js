@@ -22,6 +22,14 @@ router.post("/requirements/:id/submit", auth_1.isAuthenticated, uploader_1.defau
 router.put("/requirements/:id/approve", auth_1.isAuthenticated, _1.approveRequirementController);
 // Reject (instructor)
 router.put("/requirements/:id/reject", auth_1.isAuthenticated, _1.rejectRequirementController);
+// Update due date (instructor)
+router.put("/requirements/:id/due-date", auth_1.isAuthenticated, (0, auth_1.authorizeRoles)("instructor"), _1.updateRequirementDueDateController);
 // Get requirement stats for student
 router.get("/requirements/stats/:studentId", auth_1.isAuthenticated, _1.getRequirementStatsController);
+// Create comment on requirement (instructor only)
+router.post("/requirements/:id/comments", auth_1.isAuthenticated, (0, auth_1.authorizeRoles)("instructor"), _1.createRequirementCommentController);
+// Get comments for a requirement (authenticated)
+router.get("/requirements/:id/comments", auth_1.isAuthenticated, _1.getRequirementCommentsController);
+// Get unread comments for a student (student only, for notifications)
+router.get("/requirements/comments/student/:studentId", auth_1.isAuthenticated, _1.getStudentRequirementCommentsController);
 exports.default = router;

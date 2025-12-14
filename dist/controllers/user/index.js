@@ -54,7 +54,7 @@ const jwt_1 = require("../../utils/jwt.js");
 // Simple in-memory reset store (email -> { code, expiresAt })
 const passwordResetStore = new Map();
 const registerUserController = async (req, res) => {
-    const { firstName, lastName, email, password, role, gender, age, phone, middleName, address, bio, studentId, instructorId, departmentId, } = req.body;
+    const { firstName, lastName, email, password, role, gender, age, phone, middleName, address, bio, studentId, instructorId, departmentId, program, specialization, yearLevel, } = req.body;
     if (!firstName || !lastName || !email || !password) {
         throw new error_1.BadRequestError("Please provide all necessary data.");
     }
@@ -102,6 +102,9 @@ const registerUserController = async (req, res) => {
         studentId,
         instructorId,
         departmentId,
+        program,
+        specialization,
+        yearLevel,
         avatar,
     };
     const activationToken = (0, user_1.createActivationToken)(user);
@@ -369,7 +372,7 @@ const logoutController = async (req, res) => {
 exports.logoutController = logoutController;
 const editUserController = async (req, res) => {
     const { id } = req.params;
-    const { firstName, lastName, middleName, email, phone, age, gender, address, bio, studentId, instructorId, role, password, } = req.body;
+    const { firstName, lastName, middleName, email, phone, age, gender, address, bio, studentId, instructorId, role, password, departmentId, program, specialization, yearLevel, } = req.body;
     if (!id) {
         throw new error_1.BadRequestError("User ID is required.");
     }
@@ -389,6 +392,10 @@ const editUserController = async (req, res) => {
         ...(instructorId !== undefined && { instructorId }),
         ...(role && { role }),
         ...(password && { password }),
+        ...(departmentId !== undefined && { departmentId }),
+        ...(program !== undefined && { program }),
+        ...(specialization !== undefined && { specialization }),
+        ...(yearLevel !== undefined && { yearLevel }),
         ...(avatar && { avatar }),
     };
     const updatedUser = await (0, user_3.updateUserData)(id, updateData);

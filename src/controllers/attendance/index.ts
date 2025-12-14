@@ -242,7 +242,7 @@ export const clockInController = async (req: Request, res: Response) => {
     macAddress,
     remarks,
     photoUrl,
-    sessionType: sessionType as "morning" | "afternoon",
+    sessionType: sessionType as "morning" | "afternoon" | "overtime",
     agency,
   });
 
@@ -334,7 +334,7 @@ export const clockOutController = async (req: Request, res: Response) => {
     macAddress,
     remarks,
     photoUrl,
-    sessionType: sessionType as "morning" | "afternoon",
+    sessionType: sessionType as "morning" | "afternoon" | "overtime",
     agency,
   });
 

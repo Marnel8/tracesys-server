@@ -13,7 +13,11 @@ import {
 	getRequirementsData,
 	rejectRequirementData,
 	updateRequirementFileData,
+	updateRequirementDueDateData,
 	getRequirementStatsData,
+	createRequirementCommentData,
+	getRequirementCommentsData,
+	getStudentUnreadCommentsData,
 } from "@/data/requirement";
 import { logStudentAction } from "@/utils/audit-logger";
 
@@ -25,11 +29,13 @@ export const createRequirementFromTemplateController = async (
 	if (!templateId || !studentId) {
 		throw new BadRequestError("templateId and studentId are required");
 	}
+	// Convert ISO string to Date object if provided
+	const dueDateValue = dueDate ? new Date(dueDate) : null;
 	const requirement = await createRequirementFromTemplateData({
 		templateId,
 		studentId,
 		practicumId,
-		dueDate,
+		dueDate: dueDateValue,
 	});
 	res.status(StatusCodes.CREATED).json({
 		success: true,
@@ -39,7 +45,7 @@ export const createRequirementFromTemplateController = async (
 };
 
 export const getRequirementsController = async (req: Request, res: Response) => {
-	const { page = 1, limit = 10, search = "", status = "all", studentId, practicumId } =
+	const { page = 1, limit = 10, search = "", status = "all", studentId, practicumId, includePending } =
 		req.query as any;
 	const result = await getRequirementsData({
 		page: Number(page),
@@ -49,7 +55,8 @@ export const getRequirementsController = async (req: Request, res: Response) => 
 		studentId: studentId || undefined,
 		practicumId: practicumId || undefined,
 		instructorId: req.user?.role === "instructor" ? req.user.id : undefined,
-	});
+		includePending: includePending === "true" || includePending === true,
+	} as any);
 	res.status(StatusCodes.OK).json({ success: true, message: "Requirements retrieved", data: result });
 };
 
@@ -214,6 +221,93 @@ export const getRequirementStatsController = async (req: Request, res: Response)
 		success: true, 
 		message: "Requirement stats retrieved", 
 		data: stats 
+	});
+};
+
+export const createRequirementCommentController = async (req: Request, res: Response) => {
+	const { id } = req.params;
+	if (!id) throw new BadRequestError("Requirement ID is required");
+	const userId = req.user?.id;
+	if (!userId) throw new BadRequestError("Missing authenticated user context");
+	const { content, isPrivate = false } = req.body || {};
+	if (!content?.trim()) throw new BadRequestError("Comment content is required");
+
+	const comment = await createRequirementCommentData(id, userId, content.trim(), isPrivate);
+	
+	res.status(StatusCodes.CREATED).json({
+		success: true,
+		message: "Comment created",
+		data: comment,
+	});
+};
+
+export const getRequirementCommentsController = async (req: Request, res: Response) => {
+	const { id } = req.params;
+	if (!id) throw new BadRequestError("Requirement ID is required");
+
+	const comments = await getRequirementCommentsData(id);
+	
+	res.status(StatusCodes.OK).json({
+		success: true,
+		message: "Comments retrieved",
+		data: comments,
+	});
+};
+
+export const getStudentRequirementCommentsController = async (req: Request, res: Response) => {
+	const { studentId } = req.params;
+	if (!studentId) throw new BadRequestError("Student ID is required");
+	
+	// Verify the student is requesting their own comments
+	const requestingUserId = req.user?.id;
+	if (requestingUserId !== studentId && req.user?.role !== "instructor") {
+		throw new UnauthorizedError("You can only view your own comments");
+	}
+
+	const { lastCheckTime } = req.query as any;
+	const comments = await getStudentUnreadCommentsData(studentId, lastCheckTime || null);
+	
+	res.status(StatusCodes.OK).json({
+		success: true,
+		message: "Comments retrieved",
+		data: comments,
+	});
+};
+
+export const updateRequirementDueDateController = async (req: Request, res: Response) => {
+	const { id } = req.params;
+	if (!id) throw new BadRequestError("Requirement ID is required");
+	
+	// Only instructors can update due dates
+	if (req.user?.role !== "instructor") {
+		throw new UnauthorizedError("Only instructors can update requirement due dates");
+	}
+
+	const { dueDate } = req.body;
+	// Convert ISO string to Date object if provided, or null if empty string/null
+	const dueDateValue = dueDate && dueDate !== "" ? new Date(dueDate) : null;
+	
+	const result = await updateRequirementDueDateData(id, dueDateValue);
+	
+	// Log audit event
+	await logStudentAction(req, {
+		action: "Requirement Due Date Updated",
+		resource: "Requirements",
+		resourceId: id,
+		details: `Instructor updated due date${dueDateValue ? ` to ${dueDateValue.toISOString()}` : " (removed)"}`,
+		category: "submission",
+		severity: "low",
+		status: "success",
+		metadata: {
+			requirementId: id,
+			dueDate: dueDateValue?.toISOString() || null,
+		},
+	});
+	
+	res.status(StatusCodes.OK).json({
+		success: true,
+		message: "Requirement due date updated",
+		data: result,
 	});
 };
 

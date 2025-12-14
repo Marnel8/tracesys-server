@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.clockOutData = exports.clockInData = exports.nullifyIncompleteSessions = exports.calculateHoursWithLunchExclusion = exports.checkOperatingHours = exports.checkOperatingDay = exports.findAttendanceByIdData = exports.getAttendanceListData = void 0;
+exports.clockOutData = exports.clockInData = exports.nullifyIncompleteSessions = exports.calculateHoursWithLunchExclusion = exports.calculateLunchDuration = exports.checkOperatingHours = exports.checkOperatingDay = exports.findAttendanceByIdData = exports.getAttendanceListData = void 0;
 const sequelize_1 = require("sequelize");
 const attendance_record_1 = __importDefault(require("../db/models/attendance-record.js"));
 const detailed_attendance_log_1 = __importDefault(require("../db/models/detailed-attendance-log.js"));
@@ -120,6 +120,12 @@ const findAttendanceByIdData = async (id) => {
                     }
                 ]
             },
+            {
+                model: detailed_attendance_log_1.default,
+                as: "detailedLogs",
+                attributes: ["id", "sessionType", "photoIn", "photoOut"],
+                required: false,
+            },
         ],
     });
     return record;
@@ -129,9 +135,39 @@ exports.findAttendanceByIdData = findAttendanceByIdData;
 const checkOperatingDay = (agency, date) => {
     if (!agency?.operatingDays)
         return true; // If no operating days set, allow all days
-    const dayName = date.toLocaleDateString(undefined, { weekday: "long" });
-    const operatingDays = agency.operatingDays.split(",").map(d => d.trim());
-    return operatingDays.includes(dayName);
+    // Ensure we have a valid date object
+    if (!(date instanceof Date) || isNaN(date.getTime())) {
+        return true; // If invalid date, allow (fail open)
+    }
+    // Use "en-US" locale with server's local timezone to match client-side formatting
+    // This ensures we get the correct day name in the server's timezone (Philippines = UTC+8)
+    const serverTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const dayName = date.toLocaleDateString("en-US", {
+        weekday: "long",
+        timeZone: serverTimeZone
+    });
+    // Parse and normalize operating days (case-insensitive comparison)
+    const operatingDaysRaw = String(agency.operatingDays).trim();
+    // Split by comma and clean up each day name
+    const operatingDays = operatingDaysRaw
+        .split(",")
+        .map(d => d.trim())
+        .filter(d => d.length > 0)
+        .map(d => d.toLowerCase());
+    const normalizedDayName = dayName.toLowerCase().trim();
+    // Debug: Log the comparison (remove in production if needed)
+    console.log('[checkOperatingDay]', {
+        date: date.toISOString(),
+        localDate: date.toLocaleDateString("en-US", { timeZone: serverTimeZone }),
+        dayName,
+        normalizedDayName,
+        operatingDaysRaw,
+        operatingDays,
+        serverTimeZone,
+        isMatch: operatingDays.includes(normalizedDayName)
+    });
+    // Check if the normalized day name is in the operating days list
+    return operatingDays.includes(normalizedDayName);
 };
 exports.checkOperatingDay = checkOperatingDay;
 // Helper function to check if time is within operating hours for a session
@@ -144,8 +180,36 @@ const checkOperatingHours = (agency, currentTime, sessionType) => {
     return { valid: true };
 };
 exports.checkOperatingHours = checkOperatingHours;
-// Helper function to calculate hours excluding lunch time
-const calculateHoursWithLunchExclusion = (morningTimeIn, morningTimeOut, afternoonTimeIn, afternoonTimeOut, lunchStartTime, lunchEndTime) => {
+/**
+ * Calculate the actual lunch break duration based on clock times.
+ * Lunch duration is the time between morning clock-out and afternoon clock-in.
+ *
+ * @param morningTimeOut - Morning session clock-out time
+ * @param afternoonTimeIn - Afternoon session clock-in time
+ * @returns Lunch duration in hours, or null if either time is missing
+ */
+const calculateLunchDuration = (morningTimeOut, afternoonTimeIn) => {
+    if (!morningTimeOut || !afternoonTimeIn) {
+        return null;
+    }
+    const lunchMs = new Date(afternoonTimeIn).getTime() - new Date(morningTimeOut).getTime();
+    const lunchHours = lunchMs / (1000 * 60 * 60);
+    return Math.max(0, Math.round(lunchHours * 100) / 100);
+};
+exports.calculateLunchDuration = calculateLunchDuration;
+/**
+ * Calculate total work hours excluding lunch break.
+ *
+ * Lunch is automatically excluded by calculating morning and afternoon sessions separately.
+ * The gap between morningTimeOut and afternoonTimeIn is the lunch break and is not included.
+ *
+ * @param morningTimeIn - Morning session clock-in time
+ * @param morningTimeOut - Morning session clock-out time
+ * @param afternoonTimeIn - Afternoon session clock-in time
+ * @param afternoonTimeOut - Afternoon session clock-out time
+ * @returns Total work hours (morning + afternoon), excluding lunch break
+ */
+const calculateHoursWithLunchExclusion = (morningTimeIn, morningTimeOut, afternoonTimeIn, afternoonTimeOut) => {
     let totalHours = 0;
     // Calculate morning hours
     if (morningTimeIn && morningTimeOut) {
@@ -158,6 +222,7 @@ const calculateHoursWithLunchExclusion = (morningTimeIn, morningTimeOut, afterno
         totalHours += Math.max(0, afternoonMs / (1000 * 60 * 60));
     }
     // Lunch time is automatically excluded since we calculate morning and afternoon separately
+    // The gap between morningTimeOut and afternoonTimeIn is the lunch break
     return Math.round(totalHours * 100) / 100;
 };
 exports.calculateHoursWithLunchExclusion = calculateHoursWithLunchExclusion;
@@ -181,6 +246,10 @@ const nullifyIncompleteSessions = async (studentId, practicumId, date) => {
     if (record.afternoonTimeIn && !record.afternoonTimeOut) {
         updates.afternoonTimeIn = null;
     }
+    // Nullify overtime session if clocked in but not out
+    if (record.overtimeTimeIn && !record.overtimeTimeOut) {
+        updates.overtimeTimeIn = null;
+    }
     if (Object.keys(updates).length > 0) {
         await record.update(updates);
     }
@@ -188,13 +257,42 @@ const nullifyIncompleteSessions = async (studentId, practicumId, date) => {
 exports.nullifyIncompleteSessions = nullifyIncompleteSessions;
 const clockInData = async (params) => {
     const now = new Date();
-    const recordDate = params.date ? new Date(params.date) : new Date(now.toISOString().slice(0, 10));
-    const day = params.day ?? recordDate.toLocaleDateString(undefined, { weekday: "long" });
+    // Get server's local timezone
+    const serverTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    // Create date in local timezone to avoid UTC issues
+    // Always use the current local date/time, not UTC
+    let recordDate;
+    if (params.date) {
+        // Parse date string and create in local timezone
+        // Format: YYYY-MM-DD - interpret as local date, not UTC
+        const [year, month, day] = params.date.split("-").map(Number);
+        recordDate = new Date(year, month - 1, day);
+    }
+    else {
+        // Use current local date (not UTC)
+        // Get the local date components to ensure we're using the correct day
+        const localDateStr = now.toLocaleDateString("en-CA", { timeZone: serverTimeZone }); // YYYY-MM-DD format
+        const [year, month, day] = localDateStr.split("-").map(Number);
+        recordDate = new Date(year, month - 1, day);
+    }
+    // Use "en-US" locale with server's timezone to get the correct day name
+    const day = params.day ?? recordDate.toLocaleDateString("en-US", {
+        weekday: "long",
+        timeZone: serverTimeZone
+    });
     const sessionType = params.sessionType || "morning"; // Default to morning for backward compatibility
+    // NOTE: Agency lunch times (lunchStartTime, lunchEndTime) are REFERENCE POINTS ONLY
+    // They are used for session determination and remarks calculation in the frontend,
+    // NOT for hours calculation. Actual lunch duration is calculated dynamically as:
+    // afternoonTimeIn - morningTimeOut
     // Validate operating day
     if (params.agency) {
         if (!(0, exports.checkOperatingDay)(params.agency, recordDate)) {
-            throw new Error(`Today (${day}) is not an operating day. Operating days: ${params.agency.operatingDays || "Not set"}`);
+            // Format operating days for error message
+            const operatingDaysList = params.agency.operatingDays
+                ? String(params.agency.operatingDays).split(",").map(d => d.trim()).join(",")
+                : "Not set";
+            throw new Error(`Today (${day}) is not an operating day. Operating days: ${operatingDaysList}`);
         }
         // Validate operating hours
         const hoursCheck = (0, exports.checkOperatingHours)(params.agency, now, sessionType);
@@ -220,7 +318,7 @@ const clockInData = async (params) => {
         timeInRemarks: params.remarks ?? "Normal",
         approvalStatus: "Approved",
         photoIn: params.photoUrl ?? null,
-        sessionType: sessionType === "morning" || sessionType === "afternoon" ? sessionType : "full_day",
+        sessionType: sessionType === "morning" || sessionType === "afternoon" || sessionType === "overtime" ? sessionType : "full_day",
     };
     if (sessionType === "morning") {
         // Check if already clocked in for morning
@@ -241,6 +339,20 @@ const clockInData = async (params) => {
             updateData.morningTimeIn = null;
         }
         updateData.afternoonTimeIn = now;
+        updateData.timeIn = now; // Keep for backward compatibility
+    }
+    else if (sessionType === "overtime") {
+        // Check if already clocked in for overtime
+        if (record?.overtimeTimeIn && !record.overtimeTimeOut) {
+            throw new Error("You are already clocked in for the overtime session. Please clock out first.");
+        }
+        // Ensure both morning and afternoon sessions are complete before allowing overtime
+        const morningComplete = record?.morningTimeIn && record?.morningTimeOut;
+        const afternoonComplete = record?.afternoonTimeIn && record?.afternoonTimeOut;
+        if (!morningComplete || !afternoonComplete) {
+            throw new Error("You must complete both morning and afternoon sessions before clocking in for overtime.");
+        }
+        updateData.overtimeTimeIn = now;
         updateData.timeIn = now; // Keep for backward compatibility
     }
     if (!record) {
@@ -326,9 +438,29 @@ const clockOutData = async (params) => {
         updateData.afternoonTimeOut = now;
         updateData.timeOut = now; // Keep for backward compatibility
     }
+    else if (sessionType === "overtime") {
+        // Check if clocked in for overtime
+        if (!record.overtimeTimeIn) {
+            throw new Error("You must clock in for the overtime session before clocking out");
+        }
+        if (record.overtimeTimeOut) {
+            throw new Error("You have already clocked out for the overtime session");
+        }
+        updateData.overtimeTimeOut = now;
+        updateData.timeOut = now; // Keep for backward compatibility
+    }
     // Calculate total hours excluding lunch
-    const totalHours = (0, exports.calculateHoursWithLunchExclusion)(record.morningTimeIn || updateData.morningTimeIn || null, updateData.morningTimeOut || record.morningTimeOut || null, record.afternoonTimeIn || updateData.afternoonTimeIn || null, updateData.afternoonTimeOut || record.afternoonTimeOut || null, params.agency?.lunchStartTime, params.agency?.lunchEndTime);
-    updateData.hours = totalHours;
+    // Lunch is automatically excluded by calculating morning and afternoon sessions separately
+    const totalHours = (0, exports.calculateHoursWithLunchExclusion)(record.morningTimeIn || updateData.morningTimeIn || null, updateData.morningTimeOut || record.morningTimeOut || null, record.afternoonTimeIn || updateData.afternoonTimeIn || null, updateData.afternoonTimeOut || record.afternoonTimeOut || null);
+    // Add overtime hours if present
+    let overtimeHours = 0;
+    const overtimeTimeIn = record.overtimeTimeIn || updateData.overtimeTimeIn || null;
+    const overtimeTimeOut = record.overtimeTimeOut || updateData.overtimeTimeOut || null;
+    if (overtimeTimeIn && overtimeTimeOut) {
+        const overtimeMs = new Date(overtimeTimeOut).getTime() - new Date(overtimeTimeIn).getTime();
+        overtimeHours = Math.max(0, overtimeMs / (1000 * 60 * 60));
+    }
+    updateData.hours = Math.round((totalHours + overtimeHours) * 100) / 100;
     await record.update(updateData);
     // Update detailed log entry
     const detailedLog = await detailed_attendance_log_1.default.findOne({

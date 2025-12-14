@@ -5,7 +5,7 @@ const http_status_codes_1 = require("http-status-codes");
 const error_1 = require("../../utils/error.js");
 const announcement_1 = require("../../data/announcement.js");
 const createAnnouncementController = async (req, res) => {
-    const { title, content, priority = "Medium", status = "Draft", authorId, expiryDate, isPinned = false, targets = [], } = req.body;
+    const { title, content, priority = "Medium", status = "Published", authorId, expiryDate, isPinned = false, targets = [], } = req.body;
     if (!title || !content || !authorId) {
         throw new error_1.BadRequestError("Please provide title, content, and author ID.");
     }
@@ -28,13 +28,12 @@ const createAnnouncementController = async (req, res) => {
 };
 exports.createAnnouncementController = createAnnouncementController;
 const getAnnouncementsController = async (req, res) => {
-    const { page = 1, limit = 10, search = "", status = "all", priority = "all", authorId, userId } = req.query;
+    const { page = 1, limit = 10, search = "", authorId, userId } = req.query;
     const result = await (0, announcement_1.getAnnouncementsData)({
         page: Number(page),
         limit: Number(limit),
         search: search,
-        status: status,
-        priority: priority,
+        status: "Published",
         authorId: authorId,
         userId: userId,
     });
@@ -47,14 +46,13 @@ const getAnnouncementsController = async (req, res) => {
 exports.getAnnouncementsController = getAnnouncementsController;
 // Public controller for published announcements (no authentication required)
 const getPublicAnnouncementsController = async (req, res) => {
-    const { page = 1, limit = 10, search = "", priority = "all" } = req.query;
+    const { page = 1, limit = 10, search = "" } = req.query;
     // Only allow fetching published announcements for public access
     const result = await (0, announcement_1.getAnnouncementsData)({
         page: Number(page),
         limit: Number(limit),
         search: search,
         status: "Published", // Force status to Published for public access
-        priority: priority,
     });
     res.status(http_status_codes_1.StatusCodes.OK).json({
         success: true,

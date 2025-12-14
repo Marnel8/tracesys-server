@@ -9,7 +9,11 @@ import {
 	getInstructorRequirementsController,
 	rejectRequirementController,
 	submitRequirementController,
+	updateRequirementDueDateController,
 	getRequirementStatsController,
+	createRequirementCommentController,
+	getRequirementCommentsController,
+	getStudentRequirementCommentsController,
 } from ".";
 
 const router = Router();
@@ -57,8 +61,34 @@ router.put(
 	rejectRequirementController
 );
 
+// Update due date (instructor)
+router.put(
+	"/requirements/:id/due-date",
+	isAuthenticated,
+	authorizeRoles("instructor"),
+	updateRequirementDueDateController
+);
+
 // Get requirement stats for student
 router.get("/requirements/stats/:studentId", isAuthenticated, getRequirementStatsController);
+
+// Create comment on requirement (instructor only)
+router.post(
+	"/requirements/:id/comments",
+	isAuthenticated,
+	authorizeRoles("instructor"),
+	createRequirementCommentController
+);
+
+// Get comments for a requirement (authenticated)
+router.get("/requirements/:id/comments", isAuthenticated, getRequirementCommentsController);
+
+// Get unread comments for a student (student only, for notifications)
+router.get(
+	"/requirements/comments/student/:studentId",
+	isAuthenticated,
+	getStudentRequirementCommentsController
+);
 
 export default router;
 

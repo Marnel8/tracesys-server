@@ -19,7 +19,7 @@ export const createRequirementTemplateController = async (
 		title,
 		description,
 		category,
-		priority,
+		priority = "medium",
 		isRequired = true,
 		instructions = null,
 		allowedFileTypes = [],
@@ -27,7 +27,7 @@ export const createRequirementTemplateController = async (
 		isActive = true,
 	} = req.body;
 
-	if (!title || !description || !category || !priority) {
+	if (!title || !description || !category) {
 		throw new BadRequestError("Please provide all required fields.");
 	}
 

@@ -1,6 +1,7 @@
 import { Op } from "sequelize";
 import Requirement from "@/db/models/requirement";
 import RequirementTemplate from "@/db/models/requirement-template";
+import RequirementComment from "@/db/models/requirement-comment";
 import User from "@/db/models/user";
 import StudentEnrollment from "@/db/models/student-enrollment";
 import Section from "@/db/models/section";
@@ -77,13 +78,17 @@ export const getRequirementsData = async (params: GetRequirementsParams) => {
 		where.status = status;
 	} else if (status === "all" && instructorId) {
 		// When status is "all" and user is instructor, only show requirements with files
-		// This ensures pagination works correctly (no empty pages)
-		andConditions.push({
-			[Op.or]: [
-				{ fileUrl: { [Op.ne]: null } },
-				{ fileName: { [Op.ne]: null } },
-			],
-		});
+		// UNLESS includePending is true (for summary page where we need to see all requirements)
+		// This ensures pagination works correctly (no empty pages) for the requirements list page
+		const includePending = (params as any).includePending;
+		if (!includePending) {
+			andConditions.push({
+				[Op.or]: [
+					{ fileUrl: { [Op.ne]: null } },
+					{ fileName: { [Op.ne]: null } },
+				],
+			});
+		}
 	}
 	
 	// Combine all AND conditions
@@ -245,6 +250,14 @@ export const findRequirementByID = async (id: string) => {
 			{ model: RequirementTemplate, as: "template" as any },
 			{ model: User, as: "student" as any, attributes: ["id", "firstName", "lastName", "email", "role"] },
 			{ model: User, as: "approver" as any, attributes: ["id", "firstName", "lastName", "email", "role"] },
+			{
+				model: RequirementComment,
+				as: "comments" as any,
+				include: [
+					{ model: User, as: "user" as any, attributes: ["id", "firstName", "lastName", "email", "role"] },
+				],
+				order: [["createdAt", "ASC"]],
+			},
 		],
 	});
 	return req;
@@ -299,6 +312,18 @@ export const rejectRequirementData = async (
 	return req;
 };
 
+export const updateRequirementDueDateData = async (
+	id: string,
+	dueDate: Date | null
+) => {
+	const req = await Requirement.findByPk(id);
+	if (!req) throw new Error("Requirement not found");
+	await req.update({
+		dueDate: dueDate,
+	});
+	return req;
+};
+
 export const getRequirementStatsData = async (studentId: string) => {
 	try {
 		// Get all requirements for the student
@@ -330,5 +355,94 @@ export const getRequirementStatsData = async (studentId: string) => {
 	} catch (error: any) {
 		throw new Error(error.message || "Failed to get requirement statistics");
 	}
+};
+
+export const createRequirementCommentData = async (
+	requirementId: string,
+	userId: string,
+	content: string,
+	isPrivate: boolean = false
+) => {
+	const requirement = await Requirement.findByPk(requirementId);
+	if (!requirement) {
+		throw new Error("Requirement not found");
+	}
+
+	const comment = await RequirementComment.create({
+		requirementId,
+		userId,
+		content,
+		isPrivate,
+	} as any);
+
+	// Fetch the comment with user information
+	const commentWithUser = await RequirementComment.findByPk(comment.id, {
+		include: [
+			{ model: User, as: "user" as any, attributes: ["id", "firstName", "lastName", "email", "role"] },
+			{ model: Requirement, as: "requirement" as any, attributes: ["id", "title", "studentId"] },
+		],
+	});
+
+	return commentWithUser;
+};
+
+export const getRequirementCommentsData = async (requirementId: string) => {
+	const requirement = await Requirement.findByPk(requirementId);
+	if (!requirement) {
+		throw new Error("Requirement not found");
+	}
+
+	const comments = await RequirementComment.findAll({
+		where: { requirementId, isPrivate: false },
+		include: [
+			{ model: User, as: "user" as any, attributes: ["id", "firstName", "lastName", "email", "role"] },
+		],
+		order: [["createdAt", "ASC"]],
+	});
+
+	return comments;
+};
+
+export const getStudentUnreadCommentsData = async (
+	studentId: string,
+	lastCheckTime?: string | null
+) => {
+	// Get all requirements for the student
+	const requirements = await Requirement.findAll({
+		where: { studentId },
+		attributes: ["id"],
+		raw: true,
+	});
+
+	const requirementIds = requirements.map((r: any) => r.id);
+
+	if (requirementIds.length === 0) {
+		return [];
+	}
+
+	const whereConditions: any = {
+		requirementId: { [Op.in]: requirementIds },
+		isPrivate: false,
+	};
+
+	// If lastCheckTime is provided, only get comments created after that time
+	if (lastCheckTime) {
+		whereConditions.createdAt = { [Op.gt]: new Date(lastCheckTime) };
+	}
+
+	const comments = await RequirementComment.findAll({
+		where: whereConditions,
+		include: [
+			{ model: User, as: "user" as any, attributes: ["id", "firstName", "lastName", "email", "role"] },
+			{
+				model: Requirement,
+				as: "requirement" as any,
+				attributes: ["id", "title", "studentId"],
+			},
+		],
+		order: [["createdAt", "DESC"]],
+	});
+
+	return comments;
 };
 

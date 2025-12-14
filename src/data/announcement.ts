@@ -11,13 +11,13 @@ import Department from "@/db/models/department";
 interface CreateAnnouncementParams {
 	title: string;
 	content: string;
-	priority: "Low" | "Medium" | "High";
+	priority?: "Low" | "Medium" | "High";
 	status: "Draft" | "Published" | "Archived";
 	authorId: string;
 	expiryDate?: Date;
 	isPinned?: boolean;
 	targets?: {
-		targetType: "section" | "course" | "department" | "all";
+		targetType: "section" | "course" | "all";
 		targetId?: string;
 	}[];
 }
@@ -27,7 +27,6 @@ interface GetAnnouncementsParams {
 	limit: number;
 	search?: string;
 	status?: string;
-	priority?: string;
 	authorId?: string;
 	userId?: string; // For filtering announcements visible to a specific user
 }
@@ -49,8 +48,8 @@ export const createAnnouncementData = async (data: CreateAnnouncementParams) => 
 		const announcement = await Announcement.create({
 			title: data.title,
 			content: data.content,
-			priority: data.priority,
-			status: data.status,
+			priority: data.priority || "Medium",
+			status: data.status || "Published",
 			authorId: data.authorId,
 			expiryDate: data.expiryDate,
 			isPinned: data.isPinned || false,
@@ -104,7 +103,7 @@ export const createAnnouncementData = async (data: CreateAnnouncementParams) => 
 
 export const getAnnouncementsData = async (params: GetAnnouncementsParams) => {
 	try {
-		const { page, limit, search, status, priority, authorId, userId } = params;
+		const { page, limit, search, status, authorId, userId } = params;
 		const offset = (page - 1) * limit;
 
 		// Build where clause
@@ -129,12 +128,10 @@ export const getAnnouncementsData = async (params: GetAnnouncementsParams) => {
 			});
 		}
 
-		if (status && status !== "all") {
-			whereClause[Op.and].push({ status });
-		}
-
-		if (priority && priority !== "all") {
-			whereClause[Op.and].push({ priority });
+		// Default to Published if status not provided
+		const finalStatus = status || "Published";
+		if (finalStatus !== "all") {
+			whereClause[Op.and].push({ status: finalStatus });
 		}
 
 		if (authorId) {
@@ -267,11 +264,6 @@ export const getAnnouncementsData = async (params: GetAnnouncementsParams) => {
 					// If target is "course", check if student is enrolled in a section with that course
 					if (target.targetType === "course" && target.targetId) {
 						return studentContext.courseIds.includes(target.targetId);
-					}
-
-					// If target is "department", check if student belongs to that department
-					if (target.targetType === "department" && target.targetId) {
-						return studentContext.departmentId === target.targetId;
 					}
 
 					// Default: don't include

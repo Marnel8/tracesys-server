@@ -54,6 +54,9 @@ export const registerUserController = async (req: Request, res: Response) => {
     studentId,
     instructorId,
     departmentId,
+    program,
+    specialization,
+    yearLevel,
   } = req.body;
 
   if (!firstName || !lastName || !email || !password) {
@@ -114,6 +117,9 @@ export const registerUserController = async (req: Request, res: Response) => {
     studentId,
     instructorId,
     departmentId,
+    program,
+    specialization,
+    yearLevel,
     avatar,
   };
 
@@ -492,6 +498,10 @@ export const editUserController = async (req: Request, res: Response) => {
     instructorId,
     role,
     password,
+    departmentId,
+    program,
+    specialization,
+    yearLevel,
   } = req.body;
 
   if (!id) {
@@ -516,6 +526,10 @@ export const editUserController = async (req: Request, res: Response) => {
     ...(instructorId !== undefined && { instructorId }),
     ...(role && { role }),
     ...(password && { password }),
+    ...(departmentId !== undefined && { departmentId }),
+    ...(program !== undefined && { program }),
+    ...(specialization !== undefined && { specialization }),
+    ...(yearLevel !== undefined && { yearLevel }),
     ...(avatar && { avatar }),
   };
 

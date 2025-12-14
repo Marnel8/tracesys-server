@@ -13,8 +13,8 @@ const router = Router();
 // Create new course
 router.post("/course/", isAuthenticated, createCourseController);
 
-// Get all courses with pagination and search
-router.get("/course/", isAuthenticated, getCoursesController);
+// Get all courses with pagination and search (public - needed for signup forms)
+router.get("/course/", getCoursesController);
 
 // Get single course by ID
 router.get("/course/:id", isAuthenticated, getCourseController);

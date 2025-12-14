@@ -18,8 +18,8 @@ const createAnnouncementData = async (data) => {
         const announcement = await announcement_1.default.create({
             title: data.title,
             content: data.content,
-            priority: data.priority,
-            status: data.status,
+            priority: data.priority || "Medium",
+            status: data.status || "Published",
             authorId: data.authorId,
             expiryDate: data.expiryDate,
             isPinned: data.isPinned || false,
@@ -70,7 +70,7 @@ const createAnnouncementData = async (data) => {
 exports.createAnnouncementData = createAnnouncementData;
 const getAnnouncementsData = async (params) => {
     try {
-        const { page, limit, search, status, priority, authorId, userId } = params;
+        const { page, limit, search, status, authorId, userId } = params;
         const offset = (page - 1) * limit;
         // Build where clause
         const whereClause = {};
@@ -91,11 +91,10 @@ const getAnnouncementsData = async (params) => {
                 ],
             });
         }
-        if (status && status !== "all") {
-            whereClause[sequelize_1.Op.and].push({ status });
-        }
-        if (priority && priority !== "all") {
-            whereClause[sequelize_1.Op.and].push({ priority });
+        // Default to Published if status not provided
+        const finalStatus = status || "Published";
+        if (finalStatus !== "all") {
+            whereClause[sequelize_1.Op.and].push({ status: finalStatus });
         }
         if (authorId) {
             whereClause[sequelize_1.Op.and].push({ authorId });
@@ -212,10 +211,6 @@ const getAnnouncementsData = async (params) => {
                     // If target is "course", check if student is enrolled in a section with that course
                     if (target.targetType === "course" && target.targetId) {
                         return studentContext.courseIds.includes(target.targetId);
-                    }
-                    // If target is "department", check if student belongs to that department
-                    if (target.targetType === "department" && target.targetId) {
-                        return studentContext.departmentId === target.targetId;
                     }
                     // Default: don't include
                     return false;

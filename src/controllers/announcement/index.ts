@@ -23,13 +23,13 @@ import {
 interface AnnouncementData {
 	title: string;
 	content: string;
-	priority: "Low" | "Medium" | "High";
+	priority?: "Low" | "Medium" | "High";
 	status: "Draft" | "Published" | "Archived";
 	authorId: string;
 	expiryDate?: Date;
 	isPinned?: boolean;
 	targets?: {
-		targetType: "section" | "course" | "department" | "all";
+		targetType: "section" | "course" | "all";
 		targetId?: string;
 	}[];
 }
@@ -46,7 +46,7 @@ export const createAnnouncementController = async (req: Request, res: Response) 
 		title,
 		content,
 		priority = "Medium",
-		status = "Draft",
+		status = "Published",
 		authorId,
 		expiryDate,
 		isPinned = false,
@@ -82,8 +82,6 @@ export const getAnnouncementsController = async (req: Request, res: Response) =>
 		page = 1, 
 		limit = 10, 
 		search = "", 
-		status = "all", 
-		priority = "all",
 		authorId,
 		userId
 	} = req.query;
@@ -92,8 +90,7 @@ export const getAnnouncementsController = async (req: Request, res: Response) =>
 		page: Number(page),
 		limit: Number(limit),
 		search: search as string,
-		status: status as string,
-		priority: priority as string,
+		status: "Published",
 		authorId: authorId as string,
 		userId: userId as string,
 	});
@@ -110,8 +107,7 @@ export const getPublicAnnouncementsController = async (req: Request, res: Respon
 	const { 
 		page = 1, 
 		limit = 10, 
-		search = "", 
-		priority = "all"
+		search = ""
 	} = req.query;
 
 	// Only allow fetching published announcements for public access
@@ -120,7 +116,6 @@ export const getPublicAnnouncementsController = async (req: Request, res: Respon
 		limit: Number(limit),
 		search: search as string,
 		status: "Published", // Force status to Published for public access
-		priority: priority as string,
 	});
 
 	res.status(StatusCodes.OK).json({

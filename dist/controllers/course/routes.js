@@ -6,8 +6,8 @@ const auth_1 = require("../../middlewares/auth.js");
 const router = (0, express_1.Router)();
 // Create new course
 router.post("/course/", auth_1.isAuthenticated, _1.createCourseController);
-// Get all courses with pagination and search
-router.get("/course/", auth_1.isAuthenticated, _1.getCoursesController);
+// Get all courses with pagination and search (public - needed for signup forms)
+router.get("/course/", _1.getCoursesController);
 // Get single course by ID
 router.get("/course/:id", auth_1.isAuthenticated, _1.getCourseController);
 // Update course by ID

@@ -282,6 +282,18 @@ export const updateUserData = async (
       }),
       ...(userData.role && { role: userData.role }),
       ...(userData.password && { password: userData.password }),
+      ...(userData.departmentId !== undefined && {
+        departmentId: userData.departmentId || null,
+      }),
+      ...(userData.program !== undefined && {
+        program: userData.program || null,
+      }),
+      ...(userData.specialization !== undefined && {
+        specialization: userData.specialization || null,
+      }),
+      ...(userData.yearLevel !== undefined && {
+        yearLevel: userData.yearLevel || null,
+      }),
     },
     { transaction: t }
   );
