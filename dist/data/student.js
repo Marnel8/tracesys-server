@@ -316,7 +316,7 @@ const createStudentData = async (studentData) => {
             }, { transaction: t });
         }
         // Create default requirements for the student
-        await createDefaultRequirements(user.id, t);
+        await createDefaultRequirements(user.id, t, practicum?.agencyId);
         await t.commit();
         // Fetch practicum with related data if it exists
         let practicumData = null;
@@ -414,7 +414,7 @@ const createStudentFromOAuth = async (params) => {
             enrollmentDate: new Date(),
             status: "enrolled",
         }, { transaction: t });
-        // Create default requirements for the student
+        // Create default requirements for the student (no practicum at this point for OAuth)
         await createDefaultRequirements(user.id, t);
         await t.commit();
         return {
@@ -439,7 +439,15 @@ const createStudentFromOAuth = async (params) => {
 };
 exports.createStudentFromOAuth = createStudentFromOAuth;
 // Helper function to create default requirements
-const createDefaultRequirements = async (studentId, transaction) => {
+const createDefaultRequirements = async (studentId, transaction, agencyId) => {
+    // Get agency affiliation status if agencyId is provided
+    let isSchoolAffiliated = false;
+    if (agencyId) {
+        const agency = await agency_1.default.findByPk(agencyId, { transaction });
+        if (agency) {
+            isSchoolAffiliated = agency.isSchoolAffiliated || false;
+        }
+    }
     const defaultRequirements = [
         {
             title: "Medical Certificate",
@@ -447,6 +455,7 @@ const createDefaultRequirements = async (studentId, transaction) => {
             category: "health",
             priority: "high",
             isRequired: true,
+            appliesToSchoolAffiliated: true, // Applies to all
         },
         {
             title: "Insurance Certificate",
@@ -454,6 +463,7 @@ const createDefaultRequirements = async (studentId, transaction) => {
             category: "health",
             priority: "high",
             isRequired: true,
+            appliesToSchoolAffiliated: true, // Applies to all
         },
         {
             title: "Company MOA",
@@ -461,6 +471,7 @@ const createDefaultRequirements = async (studentId, transaction) => {
             category: "legal",
             priority: "urgent",
             isRequired: true,
+            appliesToSchoolAffiliated: false, // Only for non-school-affiliated agencies
         },
         {
             title: "Practicum Agreement",
@@ -468,9 +479,14 @@ const createDefaultRequirements = async (studentId, transaction) => {
             category: "legal",
             priority: "urgent",
             isRequired: true,
+            appliesToSchoolAffiliated: true, // Applies to all
         },
     ];
     for (const reqData of defaultRequirements) {
+        // Skip MOA if agency is school-affiliated
+        if (reqData.title === "Company MOA" && isSchoolAffiliated) {
+            continue;
+        }
         // Find or create requirement template
         let template = await requirement_template_1.default.findOne({
             where: { title: reqData.title },
@@ -507,7 +523,13 @@ const createDefaultRequirements = async (studentId, transaction) => {
                 ...reqData,
                 createdBy: systemUser.id,
                 isActive: true,
+                appliesToSchoolAffiliated: reqData.appliesToSchoolAffiliated !== undefined ? reqData.appliesToSchoolAffiliated : true,
             }, { transaction });
+        }
+        // Check if template should be applied based on agency affiliation
+        // If agency is school-affiliated and template doesn't apply to school-affiliated, skip
+        if (isSchoolAffiliated && !template.appliesToSchoolAffiliated) {
+            continue;
         }
         // Create requirement for student
         await requirement_1.default.create({

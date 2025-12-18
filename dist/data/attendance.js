@@ -360,11 +360,12 @@ const clockInData = async (params) => {
         updateData.practicumId = params.practicumId;
         updateData.date = recordDate;
         updateData.day = day;
-        updateData.status = params.remarks === "Late" ? "late" : "present";
+        updateData.status = "present";
         record = await attendance_record_1.default.create(updateData);
     }
     else {
-        updateData.status = params.remarks === "Late" ? "late" : record.status ?? "present";
+        // Keep existing status if record exists, default to "present" if not set
+        updateData.status = record.status ?? "present";
         await record.update(updateData);
     }
     // Create detailed log entry

@@ -5,8 +5,10 @@ import colors from "colors";
 import path from "path";
 import fs from "fs";
 import "dotenv/config";
+import cron from "node-cron";
 import errorHandlerMiddleware from "./middlewares/error-handler";
 import { routes } from "./controllers/routes";
+import { createAbsentRecordsForDate } from "./services/attendance-scheduler";
 
 import "./db";
 
@@ -50,6 +52,23 @@ routes.forEach((route) => {
 
 app.listen(PORT, () => {
   console.log(colors.cyan(`TRACESYS Server running on port: ${PORT}`));
+  
+  // Set up daily cron job to create absent records
+  // Runs every day at 1:00 AM (server time)
+  // This checks the previous day for missing attendance records
+  cron.schedule("0 1 * * *", async () => {
+    console.log(colors.yellow("[Cron Job] Starting daily absent records check..."));
+    try {
+      await createAbsentRecordsForDate();
+      console.log(colors.green("[Cron Job] Daily absent records check completed"));
+    } catch (error: any) {
+      console.error(colors.red(`[Cron Job] Error: ${error.message}`));
+    }
+  }, {
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+  });
+  
+  console.log(colors.green("[Cron Job] Daily absent records scheduler initialized (runs at 1:00 AM daily)"));
 });
 
 // testing api

@@ -25,6 +25,7 @@ import AuditLog from "./models/audit-log";
 import AchievementTemplate from "./models/achievement-template";
 import Achievement from "./models/achievement";
 import FileAttachment from "./models/file-attachment";
+import ReportView from "./models/report-view";
 import Invitation from "./models/invitation";
 
 const sequelize = new Sequelize({
@@ -47,6 +48,7 @@ const sequelize = new Sequelize({
 		DetailedAttendanceLog,
 		ReportTemplate,
 		Report,
+		ReportView,
 		RequirementTemplate,
 		Requirement,
 		RequirementComment,

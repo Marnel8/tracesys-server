@@ -12,6 +12,8 @@ import {
 	rejectReportData,
 	updateReportSubmissionData,
 	getReportStatsData,
+	createReportViewData,
+	getStudentReportViewNotificationsData,
 } from "@/data/report";
 import { createReportData, createNarrativeReportData, getNarrativeReportsData } from "@/data/report";
 import { validateImageFile } from "@/utils/image-uploader";
@@ -422,7 +424,15 @@ export const rejectReportController = async (req: Request, res: Response) => {
 	const { reason } = req.body || {};
 	if (!reason?.trim()) throw new BadRequestError("Rejection reason is required");
 	const result = await rejectReportData(id, approverId, reason);
-	
+
+	// Log a report notification for the student so it appears in their Reports notifications
+	try {
+		await createReportViewData(id, approverId);
+	} catch (err) {
+		// Non-fatal: if notification creation fails, do not block the rejection flow
+		console.error("Failed to create report notification on rejection", err);
+	}
+
 	// Log audit event
 	await logStudentAction(req, {
 		action: "Report Rejected",
@@ -454,5 +464,67 @@ export const getReportStatsController = async (req: Request, res: Response) => {
 		data: stats,
 	});
 };
+
+export const logReportViewController = async (req: Request, res: Response) => {
+	const { id } = req.params;
+	if (!id) throw new BadRequestError("Report ID is required");
+
+	const viewerId = req.user?.id;
+	if (!viewerId) throw new BadRequestError("Missing authenticated user context");
+	if (req.user?.role !== "instructor") {
+		throw new UnauthorizedError("Only instructors can log report views");
+	}
+
+	const view = await createReportViewData(id, viewerId);
+
+	// Optional: log audit event for instructor viewing a student's report
+	await logStudentAction(req, {
+		action: "Narrative Report Viewed",
+		resource: "Reports",
+		resourceId: id,
+		details: `Instructor viewed student report`,
+		category: "submission",
+		severity: "low",
+		status: "success",
+		metadata: {
+			reportId: id,
+			viewId: view.id,
+			instructorId: viewerId,
+		},
+	});
+
+	res.status(StatusCodes.CREATED).json({
+		success: true,
+		message: "Report view logged",
+		data: view,
+	});
+};
+
+export const getStudentReportViewNotificationsController = async (
+	req: Request,
+	res: Response
+) => {
+	const { studentId } = req.params;
+	if (!studentId) throw new BadRequestError("Student ID is required");
+
+	// Students can only see their own notifications; instructors can see for their students
+	const requestingUserId = req.user?.id;
+	if (requestingUserId !== studentId && req.user?.role !== "instructor") {
+		throw new UnauthorizedError("You can only view your own report notifications");
+	}
+
+	const { lastCheckTime } = req.query as any;
+	const views = await getStudentReportViewNotificationsData(
+		studentId,
+		lastCheckTime || null
+	);
+
+	res.status(StatusCodes.OK).json({
+		success: true,
+		message: "Report view notifications retrieved",
+		data: views,
+	});
+};
+
 
 

@@ -40,6 +40,28 @@ interface BulkInvitationParams {
 export const createInvitation = async (params: CreateInvitationParams): Promise<Invitation> => {
 	const { email, role, departmentId, sectionId, program, createdBy, expiresInDays = 7 } = params;
 
+	// Check if user already exists in the database
+	const existingUser = await User.findOne({
+		where: { email },
+	});
+
+	if (existingUser) {
+		throw new ConflictError("A user with this email already exists in the system.");
+	}
+
+	// Check if invitation was already used (usedAt is not null)
+	const usedInvitation = await Invitation.findOne({
+		where: {
+			email,
+			role,
+			usedAt: { [Op.ne]: null },
+		},
+	});
+
+	if (usedInvitation) {
+		throw new ConflictError("An invitation for this email has already been used.");
+	}
+
 	// Check if invitation already exists for this email and is not used
 	const existingInvitation = await Invitation.findOne({
 		where: {
@@ -97,6 +119,32 @@ export const createBulkInvitations = async (params: BulkInvitationParams): Promi
 	try {
 		for (const email of emails) {
 			try {
+				// Check if user already exists in the database
+				const existingUser = await User.findOne({
+					where: { email },
+					transaction: t,
+				});
+
+				if (existingUser) {
+					errors.push(`${email}: User already exists in the system`);
+					continue;
+				}
+
+				// Check if invitation was already used (usedAt is not null)
+				const usedInvitation = await Invitation.findOne({
+					where: {
+						email,
+						role,
+						usedAt: { [Op.ne]: null },
+					},
+					transaction: t,
+				});
+
+				if (usedInvitation) {
+					errors.push(`${email}: Invitation already used`);
+					continue;
+				}
+
 				// Check if active invitation exists
 				const existingInvitation = await Invitation.findOne({
 					where: {

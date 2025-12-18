@@ -126,6 +126,10 @@ __decorate([
     __metadata("design:type", Date)
 ], Agency.prototype, "partnershipEndDate", void 0);
 __decorate([
+    (0, sequelize_typescript_1.Column)({ type: sequelize_typescript_1.DataType.BOOLEAN, defaultValue: false }),
+    __metadata("design:type", Boolean)
+], Agency.prototype, "isSchoolAffiliated", void 0);
+__decorate([
     sequelize_typescript_1.CreatedAt,
     __metadata("design:type", Date)
 ], Agency.prototype, "createdAt", void 0);

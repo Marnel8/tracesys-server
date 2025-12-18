@@ -103,6 +103,9 @@ export default class Agency extends Model {
 	@Column({ type: DataType.DATE, allowNull: true })
 	declare partnershipEndDate: Date;
 
+	@Column({ type: DataType.BOOLEAN, defaultValue: false })
+	declare isSchoolAffiliated: boolean;
+
 	@CreatedAt
 	declare createdAt: Date;
 

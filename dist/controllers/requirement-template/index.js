@@ -9,7 +9,7 @@ const error_1 = require("../../utils/error.js");
 const path_1 = __importDefault(require("path"));
 const requirement_template_1 = require("../../data/requirement-template.js");
 const createRequirementTemplateController = async (req, res) => {
-    const { title, description, category, priority = "medium", isRequired = true, instructions = null, allowedFileTypes = [], maxFileSize = null, isActive = true, } = req.body;
+    const { title, description, category, priority = "medium", isRequired = true, instructions = null, allowedFileTypes = [], maxFileSize = null, isActive = true, appliesToSchoolAffiliated = true, } = req.body;
     if (!title || !description || !category) {
         throw new error_1.BadRequestError("Please provide all required fields.");
     }
@@ -44,6 +44,7 @@ const createRequirementTemplateController = async (req, res) => {
         allowedFileTypes: ["DOCX"],
         maxFileSize,
         isActive,
+        appliesToSchoolAffiliated,
         createdBy,
         ...fileMeta,
     });

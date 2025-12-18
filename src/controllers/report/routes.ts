@@ -13,6 +13,8 @@ import {
 	getReportStatsController,
 	createNarrativeReportController,
 	listNarrativeReportsController,
+	logReportViewController,
+	getStudentReportViewNotificationsController,
 } from ".";
 
 const router = Router();
@@ -74,6 +76,21 @@ router.put(
 	"/reports/:id/reject",
 	isAuthenticated,
 	rejectReportController
+);
+
+// Log a report view (instructor viewing a student's report)
+router.post(
+	"/reports/:id/view",
+	isAuthenticated,
+	authorizeRoles("instructor"),
+	logReportViewController
+);
+
+// Get report view notifications for a student
+router.get(
+	"/reports/views/student/:studentId",
+	isAuthenticated,
+	getStudentReportViewNotificationsController
 );
 
 // Get report stats for student

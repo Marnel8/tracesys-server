@@ -37,6 +37,7 @@ interface AgencyData {
 	isActive?: boolean;
 	latitude?: number;
 	longitude?: number;
+	isSchoolAffiliated?: boolean;
 }
 
 // Supervisor data interface
@@ -67,6 +68,7 @@ export const createAgencyController = async (req: Request, res: Response) => {
 		isActive = true,
 		latitude,
 		longitude,
+		isSchoolAffiliated = false,
 	}: AgencyData = req.body;
 
 	if (!name || !address || !contactPerson || !contactRole || !contactPhone || !contactEmail || !branchType) {
@@ -89,6 +91,7 @@ export const createAgencyController = async (req: Request, res: Response) => {
 		isActive,
 		latitude,
 		longitude,
+		isSchoolAffiliated,
 	};
 
 	const result = await createAgencyData(agencyData);

@@ -24,6 +24,24 @@ const sequelize_1 = require("sequelize");
 const crypto_1 = __importDefault(require("crypto"));
 const createInvitation = async (params) => {
     const { email, role, departmentId, sectionId, program, createdBy, expiresInDays = 7 } = params;
+    // Check if user already exists in the database
+    const existingUser = await user_1.default.findOne({
+        where: { email },
+    });
+    if (existingUser) {
+        throw new error_1.ConflictError("A user with this email already exists in the system.");
+    }
+    // Check if invitation was already used (usedAt is not null)
+    const usedInvitation = await invitation_1.default.findOne({
+        where: {
+            email,
+            role,
+            usedAt: { [sequelize_1.Op.ne]: null },
+        },
+    });
+    if (usedInvitation) {
+        throw new error_1.ConflictError("An invitation for this email has already been used.");
+    }
     // Check if invitation already exists for this email and is not used
     const existingInvitation = await invitation_1.default.findOne({
         where: {
@@ -71,6 +89,28 @@ const createBulkInvitations = async (params) => {
     try {
         for (const email of emails) {
             try {
+                // Check if user already exists in the database
+                const existingUser = await user_1.default.findOne({
+                    where: { email },
+                    transaction: t,
+                });
+                if (existingUser) {
+                    errors.push(`${email}: User already exists in the system`);
+                    continue;
+                }
+                // Check if invitation was already used (usedAt is not null)
+                const usedInvitation = await invitation_1.default.findOne({
+                    where: {
+                        email,
+                        role,
+                        usedAt: { [sequelize_1.Op.ne]: null },
+                    },
+                    transaction: t,
+                });
+                if (usedInvitation) {
+                    errors.push(`${email}: Invitation already used`);
+                    continue;
+                }
                 // Check if active invitation exists
                 const existingInvitation = await invitation_1.default.findOne({
                     where: {

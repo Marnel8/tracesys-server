@@ -29,6 +29,7 @@ const audit_log_1 = __importDefault(require("./models/audit-log.js"));
 const achievement_template_1 = __importDefault(require("./models/achievement-template.js"));
 const achievement_1 = __importDefault(require("./models/achievement.js"));
 const file_attachment_1 = __importDefault(require("./models/file-attachment.js"));
+const report_view_1 = __importDefault(require("./models/report-view.js"));
 const invitation_1 = __importDefault(require("./models/invitation.js"));
 const sequelize = new sequelize_typescript_1.Sequelize({
     database: process.env.DB_NAME,
@@ -50,6 +51,7 @@ const sequelize = new sequelize_typescript_1.Sequelize({
         detailed_attendance_log_1.default,
         report_template_1.default,
         report_1.default,
+        report_view_1.default,
         requirement_template_1.default,
         requirement_1.default,
         requirement_comment_1.default,

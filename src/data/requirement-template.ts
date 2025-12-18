@@ -22,6 +22,7 @@ interface CreateRequirementTemplateParams {
 	allowedFileTypes?: string[] | null; // will be stored as CSV in TEXT field
 	maxFileSize?: number | null; // MB
 	isActive?: boolean;
+	appliesToSchoolAffiliated?: boolean; // Optional, defaults to true in database
 	createdBy: string;
 	// Optional downloadable template file metadata
 	templateFileUrl?: string | null;
@@ -55,6 +56,7 @@ export const createRequirementTemplateData = async (
 		const template = await RequirementTemplate.create({
 			...data,
 			priority: data.priority || "medium", // Default to "medium" if not provided
+			appliesToSchoolAffiliated: data.appliesToSchoolAffiliated !== undefined ? data.appliesToSchoolAffiliated : true, // Default to true if not provided
 			allowedFileTypes: data.allowedFileTypes?.join(",") ?? null,
 		} as any);
 

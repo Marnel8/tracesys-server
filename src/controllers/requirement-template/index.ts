@@ -25,6 +25,7 @@ export const createRequirementTemplateController = async (
 		allowedFileTypes = [],
 		maxFileSize = null,
 		isActive = true,
+		appliesToSchoolAffiliated = true,
 	} = req.body;
 
 	if (!title || !description || !category) {
@@ -64,6 +65,7 @@ export const createRequirementTemplateController = async (
 		allowedFileTypes: ["DOCX"],
 		maxFileSize,
 		isActive,
+		appliesToSchoolAffiliated,
 		createdBy,
 		...fileMeta,
 	});

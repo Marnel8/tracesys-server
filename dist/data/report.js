@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getReportStatsData = exports.rejectReportData = exports.approveReportData = exports.updateReportSubmissionData = exports.findReportByID = exports.getNarrativeReportsData = exports.getReportsData = exports.createNarrativeReportData = exports.createReportData = exports.createReportFromTemplateData = void 0;
+exports.getReportStatsData = exports.rejectReportData = exports.approveReportData = exports.updateReportSubmissionData = exports.findReportByID = exports.getStudentReportViewNotificationsData = exports.createReportViewData = exports.getNarrativeReportsData = exports.getReportsData = exports.createNarrativeReportData = exports.createReportData = exports.createReportFromTemplateData = void 0;
 const sequelize_1 = require("sequelize");
 const report_1 = __importDefault(require("../db/models/report.js"));
 const report_template_1 = __importDefault(require("../db/models/report-template.js"));
@@ -11,6 +11,7 @@ const user_1 = __importDefault(require("../db/models/user.js"));
 const practicum_1 = __importDefault(require("../db/models/practicum.js"));
 const student_enrollment_1 = __importDefault(require("../db/models/student-enrollment.js"));
 const section_1 = __importDefault(require("../db/models/section.js"));
+const report_view_1 = __importDefault(require("../db/models/report-view.js"));
 const createReportFromTemplateData = async (params) => {
     const template = await report_template_1.default.findByPk(params.templateId);
     if (!template) {
@@ -196,6 +197,49 @@ const getNarrativeReportsData = async (params) => {
     });
 };
 exports.getNarrativeReportsData = getNarrativeReportsData;
+/**
+ * Log that an instructor viewed a report (for student notifications)
+ */
+const createReportViewData = async (reportId, instructorId) => {
+    const report = await report_1.default.findByPk(reportId);
+    if (!report) {
+        throw new Error("Report not found");
+    }
+    const view = await report_view_1.default.create({
+        reportId,
+        studentId: report.studentId,
+        instructorId,
+    });
+    return view;
+};
+exports.createReportViewData = createReportViewData;
+/**
+ * Get report view notifications for a student, optionally filtered by lastCheckTime
+ */
+const getStudentReportViewNotificationsData = async (studentId, lastCheckTime) => {
+    const where = { studentId };
+    if (lastCheckTime) {
+        where.createdAt = { [sequelize_1.Op.gt]: new Date(lastCheckTime) };
+    }
+    const views = await report_view_1.default.findAll({
+        where,
+        include: [
+            {
+                model: report_1.default,
+                as: "report",
+                attributes: ["id", "title", "type", "status", "submittedDate"],
+            },
+            {
+                model: user_1.default,
+                as: "instructor",
+                attributes: ["id", "firstName", "lastName", "email", "role"],
+            },
+        ],
+        order: [["createdAt", "DESC"]],
+    });
+    return views;
+};
+exports.getStudentReportViewNotificationsData = getStudentReportViewNotificationsData;
 const findReportByID = async (id) => {
     const report = await report_1.default.findByPk(id, {
         include: [

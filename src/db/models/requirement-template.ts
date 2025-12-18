@@ -72,6 +72,9 @@ export default class RequirementTemplate extends Model {
 	@Column({ type: DataType.BOOLEAN, defaultValue: true })
 	declare isActive: boolean;
 
+	@Column({ type: DataType.BOOLEAN, defaultValue: true })
+	declare appliesToSchoolAffiliated: boolean;
+
 	@ForeignKey(() => User)
 	@Column({ type: DataType.UUID, allowNull: false })
 	declare createdBy: string;

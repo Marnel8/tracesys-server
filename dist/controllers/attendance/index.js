@@ -319,15 +319,18 @@ const getAttendanceStatsController = async (req, res) => {
     const totalDays = records.length;
     const presentDays = records.filter((r) => r.status === "present").length;
     const absentDays = records.filter((r) => r.status === "absent").length;
+    // Note: "late" status is deprecated but included for backward compatibility with existing data
     const lateDays = records.filter((r) => r.status === "late").length;
     const excusedDays = records.filter((r) => r.status === "excused").length;
+    // Count "late" as "present" for attendance percentage (backward compatibility)
     const attendancePercentage = totalDays > 0
         ? Math.round(((presentDays + lateDays + excusedDays) / totalDays) * 100)
         : 0;
-    // Calculate current streak (consecutive present/late/excused days from most recent)
+    // Calculate current streak (consecutive present/excused days from most recent)
+    // Note: "late" is included for backward compatibility
     let currentStreak = 0;
     for (let i = records.length - 1; i >= 0; i--) {
-        if (["present", "late", "excused"].includes(records[i].status)) {
+        if (["present", "excused"].includes(records[i].status) || records[i].status === "late") {
             currentStreak++;
         }
         else {
@@ -338,7 +341,7 @@ const getAttendanceStatsController = async (req, res) => {
     let longestStreak = 0;
     let tempStreak = 0;
     for (const record of records) {
-        if (["present", "late", "excused"].includes(record.status)) {
+        if (["present", "excused"].includes(record.status) || record.status === "late") {
             tempStreak++;
             longestStreak = Math.max(longestStreak, tempStreak);
         }
@@ -350,7 +353,7 @@ const getAttendanceStatsController = async (req, res) => {
         totalDays,
         presentDays,
         absentDays,
-        lateDays,
+        lateDays, // Kept for backward compatibility
         excusedDays,
         attendancePercentage,
         currentStreak,

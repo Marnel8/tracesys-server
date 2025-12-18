@@ -5,6 +5,7 @@ import User from "@/db/models/user";
 import Practicum from "@/db/models/practicum";
 import StudentEnrollment from "@/db/models/student-enrollment";
 import Section from "@/db/models/section";
+import ReportView from "@/db/models/report-view";
 
 export type ReportType = "weekly" | "monthly" | "final" | "narrative";
 export type ReportStatus = "draft" | "submitted" | "approved" | "rejected";
@@ -239,6 +240,56 @@ export const getNarrativeReportsData = async (
 		...params,
 		type: "narrative",
 	});
+};
+
+/**
+ * Log that an instructor viewed a report (for student notifications)
+ */
+export const createReportViewData = async (reportId: string, instructorId: string) => {
+	const report = await Report.findByPk(reportId);
+	if (!report) {
+		throw new Error("Report not found");
+	}
+
+	const view = await ReportView.create({
+		reportId,
+		studentId: report.studentId,
+		instructorId,
+	} as any);
+
+	return view;
+};
+
+/**
+ * Get report view notifications for a student, optionally filtered by lastCheckTime
+ */
+export const getStudentReportViewNotificationsData = async (
+	studentId: string,
+	lastCheckTime?: string | null
+) => {
+	const where: any = { studentId };
+	if (lastCheckTime) {
+		where.createdAt = { [Op.gt]: new Date(lastCheckTime) };
+	}
+
+	const views = await ReportView.findAll({
+		where,
+		include: [
+			{
+				model: Report,
+				as: "report" as any,
+				attributes: ["id", "title", "type", "status", "submittedDate"],
+			},
+			{
+				model: User,
+				as: "instructor" as any,
+				attributes: ["id", "firstName", "lastName", "email", "role"],
+			},
+		],
+		order: [["createdAt", "DESC"]],
+	});
+
+	return views;
 };
 
 export const findReportByID = async (id: string) => {

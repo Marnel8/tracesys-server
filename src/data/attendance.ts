@@ -16,7 +16,7 @@ interface Pagination {
 
 interface ListAttendanceParams extends Pagination {
 	search?: string;
-	status?: "present" | "absent" | "late" | "excused" | "all";
+	status?: "present" | "absent" | "excused" | "all";
 	approvalStatus?: AttendanceApprovalStatus | "all";
 	studentId?: string;
 	practicumId?: string;
@@ -311,7 +311,7 @@ interface ClockInParams {
 	deviceType?: "Mobile" | "Desktop" | "Tablet";
 	deviceUnit?: string | null;
 	macAddress?: string | null;
-	remarks?: "Normal" | "Late" | "Early";
+	remarks?: "Normal" | "Early";
 	photoUrl?: string | null;
 	sessionType?: "morning" | "afternoon" | "overtime";
 	agency?: Agency | null;
@@ -428,11 +428,12 @@ export const clockInData = async (params: ClockInParams) => {
 		updateData.practicumId = params.practicumId;
 		updateData.date = recordDate as any;
 		updateData.day = day;
-		updateData.status = params.remarks === "Late" ? "late" : "present";
+		updateData.status = "present";
 		
 		record = await AttendanceRecord.create(updateData as any);
 	} else {
-		updateData.status = params.remarks === "Late" ? "late" : record.status ?? "present";
+		// Keep existing status if record exists, default to "present" if not set
+		updateData.status = record.status ?? "present";
 		await record.update(updateData);
 	}
 

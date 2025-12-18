@@ -6,8 +6,8 @@ const error_1 = require("../../utils/error.js");
 const section_1 = require("../../data/section.js");
 const createSectionController = async (req, res) => {
     const { name, code, description, courseId, year, semester, academicYear, maxStudents = 50, isActive = true, } = req.body;
-    if (!name || !code || !courseId || !year || !semester || !academicYear) {
-        throw new error_1.BadRequestError("Please provide section name, code, course, year, semester, and academic year.");
+    if (!name || !courseId || !year || !semester || !academicYear) {
+        throw new error_1.BadRequestError("Please provide section name, course, year, semester, and academic year.");
     }
     // Get the instructor ID from the authenticated user
     const instructorId = req.user?.id;

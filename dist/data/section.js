@@ -11,12 +11,13 @@ const department_1 = __importDefault(require("../db/models/department.js"));
 const createSectionData = async (data) => {
     try {
         // Check if section with same name or code already exists for the same course
+        const orConditions = [{ name: data.name }];
+        if (data.code) {
+            orConditions.push({ code: data.code });
+        }
         const existingSection = await section_1.default.findOne({
             where: {
-                [sequelize_1.Op.or]: [
-                    { name: data.name },
-                    { code: data.code }
-                ],
+                [sequelize_1.Op.or]: orConditions,
                 courseId: data.courseId,
             },
         });

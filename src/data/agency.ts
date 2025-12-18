@@ -20,6 +20,7 @@ interface CreateAgencyParams {
 	isActive?: boolean;
 	latitude?: number;
 	longitude?: number;
+	isSchoolAffiliated?: boolean;
 }
 
 interface GetAgenciesParams {

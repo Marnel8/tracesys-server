@@ -6,7 +6,7 @@ const error_1 = require("../../utils/error.js");
 const agency_1 = require("../../data/agency.js");
 const audit_1 = require("../../middlewares/audit.js");
 const createAgencyController = async (req, res) => {
-    const { name, address, contactPerson, contactRole, contactPhone, contactEmail, branchType, openingTime, closingTime, operatingDays, lunchStartTime, lunchEndTime, isActive = true, latitude, longitude, } = req.body;
+    const { name, address, contactPerson, contactRole, contactPhone, contactEmail, branchType, openingTime, closingTime, operatingDays, lunchStartTime, lunchEndTime, isActive = true, latitude, longitude, isSchoolAffiliated = false, } = req.body;
     if (!name || !address || !contactPerson || !contactRole || !contactPhone || !contactEmail || !branchType) {
         throw new error_1.BadRequestError("Please provide all necessary agency data.");
     }
@@ -26,6 +26,7 @@ const createAgencyController = async (req, res) => {
         isActive,
         latitude,
         longitude,
+        isSchoolAffiliated,
     };
     const result = await (0, agency_1.createAgencyData)(agencyData);
     // createAgencyData returns an object { agency }, normalize to entity

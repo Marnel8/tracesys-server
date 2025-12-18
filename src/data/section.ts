@@ -5,7 +5,7 @@ import Department from "@/db/models/department";
 
 interface CreateSectionParams {
 	name: string;
-	code: string;
+	code?: string;
 	description?: string;
 	courseId: string;
 	instructorId: string;
@@ -33,12 +33,14 @@ interface GetSectionsParams {
 export const createSectionData = async (data: CreateSectionParams) => {
 	try {
 		// Check if section with same name or code already exists for the same course
+		const orConditions: any[] = [{ name: data.name }];
+		if (data.code) {
+			orConditions.push({ code: data.code });
+		}
+		
 		const existingSection = await Section.findOne({
 			where: {
-				[Op.or]: [
-					{ name: data.name },
-					{ code: data.code }
-				],
+				[Op.or]: orConditions,
 				courseId: data.courseId,
 			},
 		});

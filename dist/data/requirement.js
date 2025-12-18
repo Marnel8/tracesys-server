@@ -11,6 +11,8 @@ const requirement_comment_1 = __importDefault(require("../db/models/requirement-
 const user_1 = __importDefault(require("../db/models/user.js"));
 const student_enrollment_1 = __importDefault(require("../db/models/student-enrollment.js"));
 const section_1 = __importDefault(require("../db/models/section.js"));
+const practicum_1 = __importDefault(require("../db/models/practicum.js"));
+const agency_1 = __importDefault(require("../db/models/agency.js"));
 const createRequirementFromTemplateData = async (params) => {
     const template = await requirement_template_1.default.findByPk(params.templateId);
     if (!template) {
@@ -77,7 +79,7 @@ const getRequirementsData = async (params) => {
     }
     // Ensure students under this instructor have requirement rows for all active templates
     if (instructorId) {
-        const [enrollments, templates] = await Promise.all([
+        const [enrollments, allTemplates] = await Promise.all([
             student_enrollment_1.default.findAll({
                 attributes: ["studentId"],
                 include: [
@@ -99,6 +101,40 @@ const getRequirementsData = async (params) => {
         const studentIds = Array.from(new Set(enrollments
             .map((e) => e.studentId)
             .filter((id) => !!id)));
+        // Get student practicums with agency information to filter templates
+        const practicums = await practicum_1.default.findAll({
+            where: {
+                studentId: { [sequelize_1.Op.in]: studentIds },
+                status: "active",
+            },
+            include: [
+                {
+                    model: agency_1.default,
+                    as: "agency",
+                    attributes: ["id", "isSchoolAffiliated"],
+                    required: false,
+                },
+            ],
+        });
+        // Create a map of studentId -> agency school affiliation status
+        const studentAgencyMap = new Map();
+        for (const practicum of practicums) {
+            const agency = practicum.agency;
+            if (agency) {
+                studentAgencyMap.set(practicum.studentId, agency.isSchoolAffiliated || false);
+            }
+        }
+        // Filter templates based on agency school affiliation
+        // Logic: If agency isSchoolAffiliated is true, only include templates where appliesToSchoolAffiliated is true
+        // If agency isSchoolAffiliated is false/undefined, include all templates
+        const templates = allTemplates.filter((tmpl) => {
+            // If no practicum/agency info, include all templates (backward compatibility)
+            if (studentIds.length === 0)
+                return true;
+            // For each student, we'll filter when creating requirements
+            // Here we just keep all templates that could be applicable
+            return true;
+        });
         const templateIds = templates.map((t) => t.id).filter(Boolean);
         if (studentIds.length && templateIds.length) {
             const existing = await requirement_1.default.findAll({
@@ -137,7 +173,13 @@ const getRequirementsData = async (params) => {
             const existingSet = new Set(existing.map((r) => `${r.studentId}:${r.templateId}`));
             const toCreate = [];
             for (const sid of studentIds) {
-                for (const tmpl of templates) {
+                const isSchoolAffiliated = studentAgencyMap.get(sid) || false;
+                for (const tmpl of allTemplates) {
+                    // Filter: If agency is school-affiliated, only include templates that apply to school-affiliated
+                    // If agency is NOT school-affiliated, include all templates
+                    if (isSchoolAffiliated && !tmpl.appliesToSchoolAffiliated) {
+                        continue; // Skip templates that don't apply to school-affiliated agencies
+                    }
                     const key = `${sid}:${tmpl.id}`;
                     if (existingSet.has(key))
                         continue;

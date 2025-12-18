@@ -21,6 +21,7 @@ const createRequirementTemplateData = async (data) => {
         const template = await requirement_template_1.default.create({
             ...data,
             priority: data.priority || "medium", // Default to "medium" if not provided
+            appliesToSchoolAffiliated: data.appliesToSchoolAffiliated !== undefined ? data.appliesToSchoolAffiliated : true, // Default to true if not provided
             allowedFileTypes: data.allowedFileTypes?.join(",") ?? null,
         });
         return { template };

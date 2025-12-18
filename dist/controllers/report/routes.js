@@ -27,6 +27,10 @@ router.post("/reports/:id/submit", auth_1.isAuthenticated, uploader_1.default.si
 router.put("/reports/:id/approve", auth_1.isAuthenticated, _1.approveReportController);
 // Reject (instructor)
 router.put("/reports/:id/reject", auth_1.isAuthenticated, _1.rejectReportController);
+// Log a report view (instructor viewing a student's report)
+router.post("/reports/:id/view", auth_1.isAuthenticated, (0, auth_1.authorizeRoles)("instructor"), _1.logReportViewController);
+// Get report view notifications for a student
+router.get("/reports/views/student/:studentId", auth_1.isAuthenticated, _1.getStudentReportViewNotificationsController);
 // Get report stats for student
 router.get("/reports/stats/:studentId", auth_1.isAuthenticated, _1.getReportStatsController);
 exports.default = router;

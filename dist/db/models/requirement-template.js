@@ -85,6 +85,10 @@ __decorate([
     __metadata("design:type", Boolean)
 ], RequirementTemplate.prototype, "isActive", void 0);
 __decorate([
+    (0, sequelize_typescript_1.Column)({ type: sequelize_typescript_1.DataType.BOOLEAN, defaultValue: true }),
+    __metadata("design:type", Boolean)
+], RequirementTemplate.prototype, "appliesToSchoolAffiliated", void 0);
+__decorate([
     (0, sequelize_typescript_1.ForeignKey)(() => user_1.default),
     (0, sequelize_typescript_1.Column)({ type: sequelize_typescript_1.DataType.UUID, allowNull: false }),
     __metadata("design:type", String)

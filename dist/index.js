@@ -10,8 +10,10 @@ const colors_1 = __importDefault(require("colors"));
 const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs"));
 require("dotenv/config");
+const node_cron_1 = __importDefault(require("node-cron"));
 const error_handler_1 = __importDefault(require("./middlewares/error-handler.js"));
 const routes_1 = require("./controllers/routes.js");
+const attendance_scheduler_1 = require("./services/attendance-scheduler.js");
 require("./db/index.js");
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 5001;
@@ -40,6 +42,22 @@ routes_1.routes.forEach((route) => {
 });
 app.listen(PORT, () => {
     console.log(colors_1.default.cyan(`TRACESYS Server running on port: ${PORT}`));
+    // Set up daily cron job to create absent records
+    // Runs every day at 1:00 AM (server time)
+    // This checks the previous day for missing attendance records
+    node_cron_1.default.schedule("0 1 * * *", async () => {
+        console.log(colors_1.default.yellow("[Cron Job] Starting daily absent records check..."));
+        try {
+            await (0, attendance_scheduler_1.createAbsentRecordsForDate)();
+            console.log(colors_1.default.green("[Cron Job] Daily absent records check completed"));
+        }
+        catch (error) {
+            console.error(colors_1.default.red(`[Cron Job] Error: ${error.message}`));
+        }
+    }, {
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    });
+    console.log(colors_1.default.green("[Cron Job] Daily absent records scheduler initialized (runs at 1:00 AM daily)"));
 });
 // testing api
 app.get("/test", (req, res, next) => {

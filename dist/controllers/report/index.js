@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getReportStatsController = exports.rejectReportController = exports.approveReportController = exports.submitReportController = exports.listNarrativeReportsController = exports.createNarrativeReportController = exports.createReportController = exports.getReportController = exports.getInstructorReportsController = exports.getReportsController = exports.createReportFromTemplateController = void 0;
+exports.getStudentReportViewNotificationsController = exports.logReportViewController = exports.getReportStatsController = exports.rejectReportController = exports.approveReportController = exports.submitReportController = exports.listNarrativeReportsController = exports.createNarrativeReportController = exports.createReportController = exports.getReportController = exports.getInstructorReportsController = exports.getReportsController = exports.createReportFromTemplateController = void 0;
 const path_1 = __importDefault(require("path"));
 const http_status_codes_1 = require("http-status-codes");
 const error_1 = require("../../utils/error.js");
@@ -361,6 +361,14 @@ const rejectReportController = async (req, res) => {
     if (!reason?.trim())
         throw new error_1.BadRequestError("Rejection reason is required");
     const result = await (0, report_2.rejectReportData)(id, approverId, reason);
+    // Log a report notification for the student so it appears in their Reports notifications
+    try {
+        await (0, report_2.createReportViewData)(id, approverId);
+    }
+    catch (err) {
+        // Non-fatal: if notification creation fails, do not block the rejection flow
+        console.error("Failed to create report notification on rejection", err);
+    }
     // Log audit event
     await (0, audit_logger_1.logStudentAction)(req, {
         action: "Report Rejected",
@@ -393,3 +401,54 @@ const getReportStatsController = async (req, res) => {
     });
 };
 exports.getReportStatsController = getReportStatsController;
+const logReportViewController = async (req, res) => {
+    const { id } = req.params;
+    if (!id)
+        throw new error_1.BadRequestError("Report ID is required");
+    const viewerId = req.user?.id;
+    if (!viewerId)
+        throw new error_1.BadRequestError("Missing authenticated user context");
+    if (req.user?.role !== "instructor") {
+        throw new error_1.UnauthorizedError("Only instructors can log report views");
+    }
+    const view = await (0, report_2.createReportViewData)(id, viewerId);
+    // Optional: log audit event for instructor viewing a student's report
+    await (0, audit_logger_1.logStudentAction)(req, {
+        action: "Narrative Report Viewed",
+        resource: "Reports",
+        resourceId: id,
+        details: `Instructor viewed student report`,
+        category: "submission",
+        severity: "low",
+        status: "success",
+        metadata: {
+            reportId: id,
+            viewId: view.id,
+            instructorId: viewerId,
+        },
+    });
+    res.status(http_status_codes_1.StatusCodes.CREATED).json({
+        success: true,
+        message: "Report view logged",
+        data: view,
+    });
+};
+exports.logReportViewController = logReportViewController;
+const getStudentReportViewNotificationsController = async (req, res) => {
+    const { studentId } = req.params;
+    if (!studentId)
+        throw new error_1.BadRequestError("Student ID is required");
+    // Students can only see their own notifications; instructors can see for their students
+    const requestingUserId = req.user?.id;
+    if (requestingUserId !== studentId && req.user?.role !== "instructor") {
+        throw new error_1.UnauthorizedError("You can only view your own report notifications");
+    }
+    const { lastCheckTime } = req.query;
+    const views = await (0, report_2.getStudentReportViewNotificationsData)(studentId, lastCheckTime || null);
+    res.status(http_status_codes_1.StatusCodes.OK).json({
+        success: true,
+        message: "Report view notifications retrieved",
+        data: views,
+    });
+};
+exports.getStudentReportViewNotificationsController = getStudentReportViewNotificationsController;

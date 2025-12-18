@@ -10,7 +10,7 @@ import { createSectionData, findSectionByID, updateSectionData, deleteSectionDat
 // Section data interface
 interface SectionData {
 	name: string;
-	code: string;
+	code?: string;
 	description?: string;
 	courseId: string;
 	year: string;
@@ -33,8 +33,8 @@ export const createSectionController = async (req: Request, res: Response) => {
 		isActive = true,
 	}: SectionData = req.body;
 
-	if (!name || !code || !courseId || !year || !semester || !academicYear) {
-		throw new BadRequestError("Please provide section name, code, course, year, semester, and academic year.");
+	if (!name || !courseId || !year || !semester || !academicYear) {
+		throw new BadRequestError("Please provide section name, course, year, semester, and academic year.");
 	}
 
 	// Get the instructor ID from the authenticated user
