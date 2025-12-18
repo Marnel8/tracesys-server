@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteAnnouncementCommentController = exports.getAnnouncementCommentsController = exports.createAnnouncementCommentController = exports.getAnnouncementStatsController = exports.togglePinAnnouncementController = exports.deleteAnnouncementController = exports.updateAnnouncementController = exports.getAnnouncementController = exports.getPublicAnnouncementsController = exports.getAnnouncementsController = exports.createAnnouncementController = void 0;
+exports.hardDeleteAnnouncementController = exports.restoreAnnouncementController = exports.getArchivedAnnouncementsController = exports.deleteAnnouncementCommentController = exports.getAnnouncementCommentsController = exports.createAnnouncementCommentController = exports.getAnnouncementStatsController = exports.togglePinAnnouncementController = exports.deleteAnnouncementController = exports.updateAnnouncementController = exports.getAnnouncementController = exports.getPublicAnnouncementsController = exports.getAnnouncementsController = exports.createAnnouncementController = void 0;
 const http_status_codes_1 = require("http-status-codes");
 const error_1 = require("../../utils/error.js");
 const announcement_1 = require("../../data/announcement.js");
@@ -192,3 +192,49 @@ const deleteAnnouncementCommentController = async (req, res) => {
     });
 };
 exports.deleteAnnouncementCommentController = deleteAnnouncementCommentController;
+const getArchivedAnnouncementsController = async (req, res) => {
+    const { page = 1, limit = 10, search = "" } = req.query;
+    const result = await (0, announcement_1.getArchivedAnnouncementsData)({
+        page: Number(page),
+        limit: Number(limit),
+        search: search,
+    });
+    res.status(http_status_codes_1.StatusCodes.OK).json({
+        success: true,
+        data: result,
+    });
+};
+exports.getArchivedAnnouncementsController = getArchivedAnnouncementsController;
+const restoreAnnouncementController = async (req, res) => {
+    const { id } = req.params;
+    if (!id) {
+        throw new error_1.BadRequestError("Announcement ID is required.");
+    }
+    const announcement = await (0, announcement_1.restoreAnnouncementData)(id);
+    res.status(http_status_codes_1.StatusCodes.OK).json({
+        success: true,
+        message: "Announcement restored successfully",
+        data: announcement,
+    });
+};
+exports.restoreAnnouncementController = restoreAnnouncementController;
+const hardDeleteAnnouncementController = async (req, res) => {
+    try {
+        const { id } = req.params;
+        if (!id) {
+            throw new error_1.BadRequestError("Announcement ID is required.");
+        }
+        await (0, announcement_1.hardDeleteAnnouncementData)(id);
+        res.status(http_status_codes_1.StatusCodes.OK).json({
+            success: true,
+            message: "Announcement permanently deleted successfully",
+        });
+    }
+    catch (error) {
+        res.status(error.statusCode || http_status_codes_1.StatusCodes.INTERNAL_SERVER_ERROR).json({
+            success: false,
+            message: error.message || "Failed to permanently delete announcement",
+        });
+    }
+};
+exports.hardDeleteAnnouncementController = hardDeleteAnnouncementController;

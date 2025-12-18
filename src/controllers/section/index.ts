@@ -5,7 +5,7 @@ import {
 	ConflictError,
 	NotFoundError,
 } from "@/utils/error";
-import { createSectionData, findSectionByID, updateSectionData, deleteSectionData, getSectionsData } from "../../data/section";
+import { createSectionData, findSectionByID, updateSectionData, deleteSectionData, getSectionsData, getArchivedSectionsData, restoreSectionData, hardDeleteSectionData } from "../../data/section";
 
 // Section data interface
 interface SectionData {
@@ -147,4 +147,57 @@ export const deleteSectionController = async (req: Request, res: Response) => {
 		success: true,
 		message: "Section deleted successfully",
 	});
+};
+
+export const getArchivedSectionsController = async (req: Request, res: Response) => {
+	const { page = 1, limit = 10, search = "" } = req.query;
+
+	const result = await getArchivedSectionsData({
+		page: Number(page),
+		limit: Number(limit),
+		search: search as string,
+	});
+
+	res.status(StatusCodes.OK).json({
+		success: true,
+		data: result,
+	});
+};
+
+export const restoreSectionController = async (req: Request, res: Response) => {
+	const { id } = req.params;
+
+	if (!id) {
+		throw new BadRequestError("Section ID is required.");
+	}
+
+	const section = await restoreSectionData(id);
+
+	res.status(StatusCodes.OK).json({
+		success: true,
+		message: "Section restored successfully",
+		data: section,
+	});
+};
+
+export const hardDeleteSectionController = async (req: Request, res: Response) => {
+	try {
+		const { id } = req.params;
+
+		if (!id) {
+			throw new BadRequestError("Section ID is required.");
+		}
+
+		await hardDeleteSectionData(id);
+
+		res.status(StatusCodes.OK).json({
+			success: true,
+			message: "Section permanently deleted successfully",
+		});
+	} catch (error: any) {
+		res.status(error.statusCode || StatusCodes.INTERNAL_SERVER_ERROR).json({
+			success: false,
+			message: error.message || "Failed to permanently delete section",
+		});
+	}
 };

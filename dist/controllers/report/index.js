@@ -3,14 +3,13 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getStudentReportViewNotificationsController = exports.logReportViewController = exports.getReportStatsController = exports.rejectReportController = exports.approveReportController = exports.submitReportController = exports.listNarrativeReportsController = exports.createNarrativeReportController = exports.createReportController = exports.getReportController = exports.getInstructorReportsController = exports.getReportsController = exports.createReportFromTemplateController = void 0;
+exports.hardDeleteReportController = exports.restoreReportController = exports.getArchivedReportsController = exports.getStudentReportViewNotificationsController = exports.logReportViewController = exports.getReportStatsController = exports.rejectReportController = exports.approveReportController = exports.submitReportController = exports.listNarrativeReportsController = exports.createNarrativeReportController = exports.createReportController = exports.getReportController = exports.getInstructorReportsController = exports.getReportsController = exports.createReportFromTemplateController = void 0;
 const path_1 = __importDefault(require("path"));
 const http_status_codes_1 = require("http-status-codes");
 const error_1 = require("../../utils/error.js");
 const file_attachment_1 = __importDefault(require("../../db/models/file-attachment.js"));
 const report_1 = __importDefault(require("../../db/models/report.js"));
 const report_2 = require("../../data/report.js");
-const report_3 = require("../../data/report.js");
 const image_uploader_1 = require("../../utils/image-uploader.js");
 const audit_logger_1 = require("../../utils/audit-logger.js");
 const createReportFromTemplateController = async (req, res) => {
@@ -107,7 +106,7 @@ const createReportController = async (req, res) => {
     }
     // weekNumber is optional even for weekly reports to keep submission simple
     // startDate and endDate are new fields for date range selection
-    const report = await (0, report_3.createReportData)({
+    const report = await (0, report_2.createReportData)({
         studentId,
         practicumId,
         title,
@@ -152,7 +151,7 @@ const createNarrativeReportController = async (req, res) => {
         }
     }
     // Create as draft first
-    const report = await (0, report_3.createNarrativeReportData)({
+    const report = await (0, report_2.createNarrativeReportData)({
         studentId,
         practicumId,
         title,
@@ -204,7 +203,7 @@ const createNarrativeReportController = async (req, res) => {
 exports.createNarrativeReportController = createNarrativeReportController;
 const listNarrativeReportsController = async (req, res) => {
     const { page = 1, limit = 10, search = "", status = "all", studentId, practicumId } = req.query;
-    const result = await (0, report_3.getNarrativeReportsData)({
+    const result = await (0, report_2.getNarrativeReportsData)({
         page: Number(page),
         limit: Number(limit),
         search: search || "",
@@ -452,3 +451,49 @@ const getStudentReportViewNotificationsController = async (req, res) => {
     });
 };
 exports.getStudentReportViewNotificationsController = getStudentReportViewNotificationsController;
+const getArchivedReportsController = async (req, res) => {
+    const { page = 1, limit = 10, search = "" } = req.query;
+    const result = await (0, report_2.getArchivedReportsData)({
+        page: Number(page),
+        limit: Number(limit),
+        search: search,
+    });
+    res.status(http_status_codes_1.StatusCodes.OK).json({
+        success: true,
+        data: result,
+    });
+};
+exports.getArchivedReportsController = getArchivedReportsController;
+const restoreReportController = async (req, res) => {
+    const { id } = req.params;
+    if (!id) {
+        throw new error_1.BadRequestError("Report ID is required.");
+    }
+    const report = await (0, report_2.restoreReportData)(id);
+    res.status(http_status_codes_1.StatusCodes.OK).json({
+        success: true,
+        message: "Report restored successfully",
+        data: report,
+    });
+};
+exports.restoreReportController = restoreReportController;
+const hardDeleteReportController = async (req, res) => {
+    try {
+        const { id } = req.params;
+        if (!id) {
+            throw new error_1.BadRequestError("Report ID is required.");
+        }
+        await (0, report_2.hardDeleteReportData)(id);
+        res.status(http_status_codes_1.StatusCodes.OK).json({
+            success: true,
+            message: "Report permanently deleted successfully",
+        });
+    }
+    catch (error) {
+        res.status(error.statusCode || http_status_codes_1.StatusCodes.INTERNAL_SERVER_ERROR).json({
+            success: false,
+            message: error.message || "Failed to permanently delete report",
+        });
+    }
+};
+exports.hardDeleteReportController = hardDeleteReportController;

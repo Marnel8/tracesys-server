@@ -3,17 +3,22 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const _1 = require("./index.js");
 const auth_1 = require("../../middlewares/auth.js");
+const audit_1 = require("../../middlewares/audit.js");
 const router = (0, express_1.Router)();
 // Create new agency
 router.post("/agency/", auth_1.isAuthenticated, _1.createAgencyController);
 // Get all agencies with pagination and search
 router.get("/agency/", auth_1.isAuthenticated, _1.getAgenciesController);
+// Archive endpoints (must come before /agency/:id to avoid route conflicts)
+router.get("/agency/archives", auth_1.isAuthenticated, _1.getArchivedAgenciesController);
+router.post("/agency/:id/restore", auth_1.isAuthenticated, _1.restoreAgencyController);
+router.delete("/agency/:id/hard-delete", auth_1.isAuthenticated, _1.hardDeleteAgencyController);
 // Get single agency by ID
 router.get("/agency/:id", auth_1.isAuthenticated, _1.getAgencyController);
 // Update agency by ID
 router.put("/agency/:id", auth_1.isAuthenticated, _1.updateAgencyController);
 // Delete agency by ID
-router.delete("/agency/:id", auth_1.isAuthenticated, _1.deleteAgencyController);
+router.delete("/agency/:id", auth_1.isAuthenticated, audit_1.auditMiddlewares.agencyDelete, _1.deleteAgencyController);
 // Supervisor Management Routes
 // Create new supervisor for an agency
 router.post("/agency/:agencyId/supervisor/", auth_1.isAuthenticated, _1.createSupervisorController);

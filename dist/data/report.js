@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getReportStatsData = exports.rejectReportData = exports.approveReportData = exports.updateReportSubmissionData = exports.findReportByID = exports.getStudentReportViewNotificationsData = exports.createReportViewData = exports.getNarrativeReportsData = exports.getReportsData = exports.createNarrativeReportData = exports.createReportData = exports.createReportFromTemplateData = void 0;
+exports.hardDeleteReportData = exports.restoreReportData = exports.getArchivedReportsData = exports.getReportStatsData = exports.rejectReportData = exports.approveReportData = exports.updateReportSubmissionData = exports.findReportByID = exports.getStudentReportViewNotificationsData = exports.createReportViewData = exports.getNarrativeReportsData = exports.getReportsData = exports.createNarrativeReportData = exports.createReportData = exports.createReportFromTemplateData = void 0;
 const sequelize_1 = require("sequelize");
 const report_1 = __importDefault(require("../db/models/report.js"));
 const report_template_1 = __importDefault(require("../db/models/report-template.js"));
@@ -321,3 +321,27 @@ const getReportStatsData = async (studentId) => {
     };
 };
 exports.getReportStatsData = getReportStatsData;
+// Archive functions - NOTE: Reports currently don't have soft delete.
+// These functions return empty results until soft delete is implemented.
+// To implement: Add a deletedAt field or isActive flag to the Report model.
+const getArchivedReportsData = async (params) => {
+    // Return empty results until soft delete is implemented
+    return {
+        items: [],
+        pagination: {
+            currentPage: params.page,
+            totalPages: 0,
+            totalItems: 0,
+            itemsPerPage: params.limit,
+        },
+    };
+};
+exports.getArchivedReportsData = getArchivedReportsData;
+const restoreReportData = async (id) => {
+    throw new Error("Report restore is not yet implemented. Add soft delete support first.");
+};
+exports.restoreReportData = restoreReportData;
+const hardDeleteReportData = async (id) => {
+    throw new Error("Report hard delete is not yet implemented. Add soft delete support first.");
+};
+exports.hardDeleteReportData = hardDeleteReportData;

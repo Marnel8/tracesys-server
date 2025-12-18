@@ -1,4 +1,5 @@
 import { Op } from "sequelize";
+import sequelize from "@/db";
 import Announcement from "@/db/models/announcement";
 import User from "@/db/models/user";
 import AnnouncementTarget from "@/db/models/announcement-target";
@@ -7,6 +8,8 @@ import StudentEnrollment from "@/db/models/student-enrollment";
 import Section from "@/db/models/section";
 import Course from "@/db/models/course";
 import Department from "@/db/models/department";
+import AuditLog from "@/db/models/audit-log";
+import { NotFoundError } from "@/utils/error";
 
 interface CreateAnnouncementParams {
 	title: string;
@@ -403,20 +406,173 @@ export const deleteAnnouncementData = async (id: string) => {
 			throw new Error("Announcement not found");
 		}
 
+		// Soft delete by setting status to "Archived"
+		await announcement.update({ status: "Archived" });
+
+		return announcement;
+	} catch (error: any) {
+		throw new Error(error.message || "Failed to delete announcement");
+	}
+};
+
+export const getArchivedAnnouncementsData = async (params: {
+	page: number;
+	limit: number;
+	search: string;
+}) => {
+	try {
+		const { page, limit, search } = params;
+		const offset = (page - 1) * limit;
+
+		const whereClause: any = {
+			status: "Archived", // Only include archived announcements
+		};
+
+		if (search) {
+			whereClause[Op.or] = [
+				{ title: { [Op.like]: `%${search}%` } },
+				{ content: { [Op.like]: `%${search}%` } },
+			];
+		}
+
+		const { count, rows: announcements } = await Announcement.findAndCountAll({
+			where: whereClause,
+			include: [
+				{
+					model: User,
+					as: "author",
+					attributes: ["id", "firstName", "lastName", "email"],
+				},
+			],
+			limit,
+			offset,
+			order: [["updatedAt", "DESC"]],
+		});
+
+		// Look up who deleted each announcement from the audit logs
+		const announcementIds = announcements.map((a) => a.id);
+		let deletedByMap: Record<string, string> = {};
+
+		if (announcementIds.length > 0) {
+			const deletionLogs = await AuditLog.findAll({
+				where: {
+					resource: "System",
+					action: "System Operation",
+					resourceId: { [Op.in]: announcementIds },
+				},
+				include: [
+					{
+						model: User,
+						as: "user",
+						attributes: ["id", "firstName", "lastName", "email"],
+					},
+				],
+				order: [["createdAt", "DESC"]],
+			});
+
+			for (const log of deletionLogs as any[]) {
+				const aid = log.resourceId as string;
+				if (!aid) continue;
+				if (deletedByMap[aid]) continue;
+
+				const deleter = log.user as User | undefined;
+				if (deleter) {
+					const fullName = `${deleter.firstName ?? ""} ${deleter.lastName ?? ""}`.trim();
+					deletedByMap[aid] = fullName || deleter.email || "Unknown";
+				} else {
+					deletedByMap[aid] = "Unknown";
+				}
+			}
+		}
+
+		// Transform to archive format
+		const items = announcements.map((announcement) => ({
+			id: announcement.id,
+			type: "announcement" as const,
+			name: announcement.title,
+			deletedAt: announcement.updatedAt.toISOString(),
+			deletedBy: deletedByMap[announcement.id] ?? null,
+			meta: {
+				author: announcement.author ? `${announcement.author.firstName} ${announcement.author.lastName}` : null,
+				priority: announcement.priority,
+			},
+			raw: announcement.toJSON(),
+		}));
+
+		return {
+			items,
+			pagination: {
+				currentPage: page,
+				totalPages: Math.ceil(count / limit),
+				totalItems: count,
+				itemsPerPage: limit,
+			},
+		};
+	} catch (error: any) {
+		throw new Error(error.message || "Failed to retrieve archived announcements");
+	}
+};
+
+export const restoreAnnouncementData = async (id: string) => {
+	const t = await sequelize.transaction();
+
+	try {
+		const announcement = await Announcement.findOne({
+			where: { id, status: "Archived" },
+			transaction: t,
+		});
+
+		if (!announcement) {
+			await t.rollback();
+			throw new NotFoundError("Archived announcement not found.");
+		}
+
+		// Restore by setting status to "Published"
+		await announcement.update({ status: "Published" }, { transaction: t });
+
+		await t.commit();
+
+		return announcement;
+	} catch (error) {
+		await t.rollback();
+		throw error;
+	}
+};
+
+export const hardDeleteAnnouncementData = async (id: string) => {
+	const t = await sequelize.transaction();
+
+	try {
+		const announcement = await Announcement.findOne({
+			where: { id, status: "Archived" },
+			transaction: t,
+		});
+
+		if (!announcement) {
+			await t.rollback();
+			throw new NotFoundError("Archived announcement not found.");
+		}
+
 		// Delete related targets and comments first
 		await AnnouncementTarget.destroy({
 			where: { announcementId: id },
+			transaction: t,
 		});
 
 		await AnnouncementComment.destroy({
 			where: { announcementId: id },
+			transaction: t,
 		});
 
-		await announcement.destroy();
+		// Finally, delete the announcement
+		await announcement.destroy({ transaction: t });
 
-		return true;
-	} catch (error: any) {
-		throw new Error(error.message || "Failed to delete announcement");
+		await t.commit();
+
+		return { success: true };
+	} catch (error) {
+		await t.rollback();
+		throw error;
 	}
 };
 

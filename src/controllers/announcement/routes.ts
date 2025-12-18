@@ -6,6 +6,9 @@ import {
 	getAnnouncementController,
 	updateAnnouncementController,
 	deleteAnnouncementController,
+	getArchivedAnnouncementsController,
+	restoreAnnouncementController,
+	hardDeleteAnnouncementController,
 	togglePinAnnouncementController,
 	getAnnouncementStatsController,
 	createAnnouncementCommentController,
@@ -13,6 +16,7 @@ import {
 	deleteAnnouncementCommentController,
 } from ".";
 import { isAuthenticated } from "@/middlewares/auth";
+import { auditMiddlewares } from "@/middlewares/audit";
 
 const router = Router();
 
@@ -30,6 +34,11 @@ router.get("/announcement/", isAuthenticated, getAnnouncementsController);
 // Get announcement statistics (must come before /:id route)
 router.get("/announcement/stats", isAuthenticated, getAnnouncementStatsController);
 
+// Archive endpoints (must come before /announcement/:id to avoid route conflicts)
+router.get("/announcement/archives", isAuthenticated, getArchivedAnnouncementsController);
+router.post("/announcement/:id/restore", isAuthenticated, restoreAnnouncementController);
+router.delete("/announcement/:id/hard-delete", isAuthenticated, hardDeleteAnnouncementController);
+
 // Get single announcement by ID
 router.get("/announcement/:id", isAuthenticated, getAnnouncementController);
 
@@ -37,7 +46,12 @@ router.get("/announcement/:id", isAuthenticated, getAnnouncementController);
 router.put("/announcement/:id", isAuthenticated, updateAnnouncementController);
 
 // Delete announcement by ID
-router.delete("/announcement/:id", isAuthenticated, deleteAnnouncementController);
+router.delete(
+	"/announcement/:id",
+	isAuthenticated,
+	auditMiddlewares.systemOperation,
+	deleteAnnouncementController
+);
 
 // Toggle pin status of announcement
 router.put("/announcement/:id/pin", isAuthenticated, togglePinAnnouncementController);

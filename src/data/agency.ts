@@ -1,8 +1,11 @@
 import { Op } from "sequelize";
+import sequelize from "@/db";
 import Agency from "@/db/models/agency";
 import Supervisor from "@/db/models/supervisor";
 import Practicum from "@/db/models/practicum";
 import User from "@/db/models/user";
+import AuditLog from "@/db/models/audit-log";
+import { NotFoundError } from "@/utils/error";
 
 interface CreateAgencyParams {
 	name: string;
@@ -228,11 +231,174 @@ export const deleteAgencyData = async (id: string) => {
 			throw new Error("Cannot delete agency with active practicums");
 		}
 
-		await agency.destroy();
+		// Soft delete by setting isActive to false
+		await agency.update({ isActive: false });
 
-		return true;
+		return agency;
 	} catch (error: any) {
 		throw new Error(error.message || "Failed to delete agency");
+	}
+};
+
+export const getArchivedAgenciesData = async (params: {
+	page: number;
+	limit: number;
+	search: string;
+}) => {
+	try {
+		const { page, limit, search } = params;
+		const offset = (page - 1) * limit;
+
+		const whereClause: any = {
+			isActive: false, // Only include archived (inactive) agencies
+		};
+
+		if (search) {
+			whereClause[Op.or] = [
+				{ name: { [Op.like]: `%${search}%` } },
+				{ contactPerson: { [Op.like]: `%${search}%` } },
+				{ contactEmail: { [Op.like]: `%${search}%` } },
+			];
+		}
+
+		const { count, rows: agencies } = await Agency.findAndCountAll({
+			where: whereClause,
+			limit,
+			offset,
+			order: [["updatedAt", "DESC"]], // Order by updatedAt (deletion time)
+		});
+
+		// Look up who deleted each agency from the audit logs
+		const agencyIds = agencies.map((a) => a.id);
+		let deletedByMap: Record<string, string> = {};
+
+		if (agencyIds.length > 0) {
+			const deletionLogs = await AuditLog.findAll({
+				where: {
+					resource: "Agency Management",
+					action: "Agency Deleted",
+					resourceId: { [Op.in]: agencyIds },
+				},
+				include: [
+					{
+						model: User,
+						as: "user",
+						attributes: ["id", "firstName", "lastName", "email"],
+					},
+				],
+				order: [["createdAt", "DESC"]],
+			});
+
+			for (const log of deletionLogs as any[]) {
+				const aid = log.resourceId as string;
+				if (!aid) continue;
+				if (deletedByMap[aid]) continue;
+
+				const deleter = log.user as User | undefined;
+				if (deleter) {
+					const fullName = `${deleter.firstName ?? ""} ${deleter.lastName ?? ""}`.trim();
+					deletedByMap[aid] = fullName || deleter.email || "Unknown";
+				} else {
+					deletedByMap[aid] = "Unknown";
+				}
+			}
+		}
+
+		// Transform to archive format
+		const items = agencies.map((agency) => ({
+			id: agency.id,
+			type: "agency" as const,
+			name: agency.name,
+			deletedAt: agency.updatedAt.toISOString(),
+			deletedBy: deletedByMap[agency.id] ?? null,
+			meta: {
+				contactPerson: agency.contactPerson,
+				contactEmail: agency.contactEmail,
+				branchType: agency.branchType,
+			},
+			raw: agency.toJSON(),
+		}));
+
+		return {
+			items,
+			pagination: {
+				currentPage: page,
+				totalPages: Math.ceil(count / limit),
+				totalItems: count,
+				itemsPerPage: limit,
+			},
+		};
+	} catch (error: any) {
+		throw new Error(error.message || "Failed to retrieve archived agencies");
+	}
+};
+
+export const restoreAgencyData = async (id: string) => {
+	const t = await sequelize.transaction();
+
+	try {
+		const agency = await Agency.findOne({
+			where: { id, isActive: false },
+			transaction: t,
+		});
+
+		if (!agency) {
+			await t.rollback();
+			throw new NotFoundError("Archived agency not found.");
+		}
+
+		// Restore by setting isActive to true
+		await agency.update({ isActive: true }, { transaction: t });
+
+		await t.commit();
+
+		return agency;
+	} catch (error) {
+		await t.rollback();
+		throw error;
+	}
+};
+
+export const hardDeleteAgencyData = async (id: string) => {
+	const t = await sequelize.transaction();
+
+	try {
+		const agency = await Agency.findOne({
+			where: { id, isActive: false },
+			transaction: t,
+		});
+
+		if (!agency) {
+			await t.rollback();
+			throw new NotFoundError("Archived agency not found.");
+		}
+
+		// Check if agency has any practicums
+		const practicumCount = await Practicum.count({
+			where: { agencyId: id },
+			transaction: t,
+		});
+
+		if (practicumCount > 0) {
+			await t.rollback();
+			throw new Error("Cannot permanently delete agency with associated practicums");
+		}
+
+		// Delete related supervisors
+		await Supervisor.destroy({
+			where: { agencyId: id },
+			transaction: t,
+		});
+
+		// Finally, delete the agency
+		await agency.destroy({ transaction: t });
+
+		await t.commit();
+
+		return { success: true };
+	} catch (error) {
+		await t.rollback();
+		throw error;
 	}
 };
 

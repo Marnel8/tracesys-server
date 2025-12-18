@@ -5,7 +5,7 @@ import {
 	ConflictError,
 	NotFoundError,
 } from "@/utils/error";
-import { createStudentData, findStudentByID, updateStudentData, deleteStudentData, getStudentsData, getStudentsByTeacherData } from "@/data/student";
+import { createStudentData, findStudentByID, updateStudentData, deleteStudentData, getStudentsData, getStudentsByTeacherData, getArchivedStudentsData, restoreStudentData, hardDeleteStudentData } from "@/data/student";
 import { uploadUserAvatar } from "@/utils/image-handler";
 import path from "path";
 import fs from "fs";
@@ -264,6 +264,59 @@ export const deleteStudentController = async (req: Request, res: Response) => {
 		res.status(error.statusCode || StatusCodes.INTERNAL_SERVER_ERROR).json({
 			success: false,
 			message: error.message || "Failed to delete student",
+		});
+	}
+};
+
+export const getArchivedStudentsController = async (req: Request, res: Response) => {
+	const { page = 1, limit = 10, search = "" } = req.query;
+
+	const result = await getArchivedStudentsData({
+		page: Number(page),
+		limit: Number(limit),
+		search: search as string,
+	});
+
+	res.status(StatusCodes.OK).json({
+		success: true,
+		data: result,
+	});
+};
+
+export const restoreStudentController = async (req: Request, res: Response) => {
+	const { id } = req.params;
+
+	if (!id) {
+		throw new BadRequestError("Student ID is required.");
+	}
+
+	const student = await restoreStudentData(id);
+
+	res.status(StatusCodes.OK).json({
+		success: true,
+		message: "Student restored successfully",
+		data: student,
+	});
+};
+
+export const hardDeleteStudentController = async (req: Request, res: Response) => {
+	try {
+		const { id } = req.params;
+
+		if (!id) {
+			throw new BadRequestError("Student ID is required.");
+		}
+
+		await hardDeleteStudentData(id);
+
+		res.status(StatusCodes.OK).json({
+			success: true,
+			message: "Student permanently deleted successfully",
+		});
+	} catch (error: any) {
+		res.status(error.statusCode || StatusCodes.INTERNAL_SERVER_ERROR).json({
+			success: false,
+			message: error.message || "Failed to permanently delete student",
 		});
 	}
 };

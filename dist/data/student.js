@@ -36,7 +36,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getStudentsByTeacherData = exports.deleteStudentData = exports.updateStudentData = exports.getStudentsData = exports.createStudentFromOAuth = exports.createStudentData = exports.findStudentByID = void 0;
+exports.hardDeleteStudentData = exports.restoreStudentData = exports.getArchivedStudentsData = exports.getStudentsByTeacherData = exports.deleteStudentData = exports.updateStudentData = exports.getStudentsData = exports.createStudentFromOAuth = exports.createStudentData = exports.findStudentByID = void 0;
 const db_1 = __importDefault(require("../db/index.js"));
 const user_1 = __importStar(require("../db/models/user.js"));
 const department_1 = __importDefault(require("../db/models/department.js"));
@@ -47,8 +47,11 @@ const supervisor_1 = __importDefault(require("../db/models/supervisor.js"));
 const practicum_1 = __importDefault(require("../db/models/practicum.js"));
 const requirement_template_1 = __importDefault(require("../db/models/requirement-template.js"));
 const requirement_1 = __importDefault(require("../db/models/requirement.js"));
+const requirement_comment_1 = __importDefault(require("../db/models/requirement-comment.js"));
 const attendance_record_1 = __importDefault(require("../db/models/attendance-record.js"));
 const invitation_1 = __importDefault(require("../db/models/invitation.js"));
+const audit_log_1 = __importDefault(require("../db/models/audit-log.js"));
+const report_1 = __importDefault(require("../db/models/report.js"));
 const error_1 = require("../utils/error.js");
 const sequelize_1 = require("sequelize");
 const student_enrollment_1 = __importDefault(require("../db/models/student-enrollment.js"));
@@ -1020,3 +1023,173 @@ const getStudentsByTeacherData = async (params) => {
     }
 };
 exports.getStudentsByTeacherData = getStudentsByTeacherData;
+const getArchivedStudentsData = async (params) => {
+    const { page, limit, search } = params;
+    const offset = (page - 1) * limit;
+    const whereClause = {
+        role: user_1.UserRole.STUDENT,
+        isActive: false, // Only include archived (inactive) students
+    };
+    if (search) {
+        whereClause[sequelize_1.Op.or] = [
+            { firstName: { [sequelize_1.Op.like]: `%${search}%` } },
+            { lastName: { [sequelize_1.Op.like]: `%${search}%` } },
+            { email: { [sequelize_1.Op.like]: `%${search}%` } },
+            { studentId: { [sequelize_1.Op.like]: `%${search}%` } },
+        ];
+    }
+    const { count, rows: students } = await user_1.default.findAndCountAll({
+        where: whereClause,
+        include: [
+            {
+                model: department_1.default,
+                as: "department",
+            },
+        ],
+        limit,
+        offset,
+        order: [["updatedAt", "DESC"]], // Order by updatedAt (deletion time)
+    });
+    // Look up who deleted each student from the audit logs
+    const studentIds = students.map((s) => s.id);
+    let deletedByMap = {};
+    if (studentIds.length > 0) {
+        const deletionLogs = await audit_log_1.default.findAll({
+            where: {
+                resource: "User Management",
+                action: "User Deleted",
+                resourceId: { [sequelize_1.Op.in]: studentIds },
+            },
+            include: [
+                {
+                    model: user_1.default,
+                    as: "user",
+                    attributes: ["id", "firstName", "lastName", "email"],
+                },
+            ],
+            order: [["createdAt", "DESC"]],
+        });
+        // Keep the most recent deletion log per student
+        for (const log of deletionLogs) {
+            const sid = log.resourceId;
+            if (!sid)
+                continue;
+            if (deletedByMap[sid])
+                continue; // already have latest due to DESC order
+            const deleter = log.user;
+            if (deleter) {
+                const fullName = `${deleter.firstName ?? ""} ${deleter.lastName ?? ""}`.trim();
+                deletedByMap[sid] = fullName || deleter.email || "Unknown";
+            }
+            else {
+                deletedByMap[sid] = "Unknown";
+            }
+        }
+    }
+    // Transform to archive format
+    const items = students.map((student) => ({
+        id: student.id,
+        type: "student",
+        name: `${student.firstName} ${student.lastName}`.trim(),
+        deletedAt: student.updatedAt.toISOString(), // Use updatedAt as deletion timestamp
+        deletedBy: deletedByMap[student.id] ?? null,
+        meta: {
+            email: student.email,
+            studentId: student.studentId,
+            department: student.department?.name,
+        },
+        raw: student.toJSON(),
+    }));
+    return {
+        items,
+        pagination: {
+            currentPage: page,
+            totalPages: Math.ceil(count / limit),
+            totalItems: count,
+            itemsPerPage: limit,
+        },
+    };
+};
+exports.getArchivedStudentsData = getArchivedStudentsData;
+const restoreStudentData = async (id) => {
+    const t = await db_1.default.transaction();
+    try {
+        const student = await user_1.default.findOne({
+            where: { id, role: user_1.UserRole.STUDENT, isActive: false },
+            transaction: t,
+        });
+        if (!student) {
+            await t.rollback();
+            throw new error_1.NotFoundError("Archived student not found.");
+        }
+        // Restore by setting isActive to true
+        await student.update({ isActive: true }, { transaction: t });
+        await t.commit();
+        return student;
+    }
+    catch (error) {
+        await t.rollback();
+        throw error;
+    }
+};
+exports.restoreStudentData = restoreStudentData;
+const hardDeleteStudentData = async (id) => {
+    const t = await db_1.default.transaction();
+    try {
+        const student = await user_1.default.findOne({
+            where: { id, role: user_1.UserRole.STUDENT, isActive: false },
+            transaction: t,
+        });
+        if (!student) {
+            await t.rollback();
+            throw new error_1.NotFoundError("Archived student not found.");
+        }
+        // Delete related records first
+        await student_enrollment_1.default.destroy({
+            where: { studentId: id },
+            transaction: t,
+        });
+        // Delete requirements and their comments
+        const requirementIds = await requirement_1.default.findAll({
+            where: { studentId: id },
+            attributes: ["id"],
+            transaction: t,
+        });
+        if (requirementIds.length > 0) {
+            await requirement_comment_1.default.destroy({
+                where: {
+                    requirementId: { [sequelize_1.Op.in]: requirementIds.map((r) => r.id) },
+                },
+                transaction: t,
+            });
+        }
+        await requirement_1.default.destroy({
+            where: { studentId: id },
+            transaction: t,
+        });
+        // Delete reports
+        await report_1.default.destroy({
+            where: { studentId: id },
+            transaction: t,
+        });
+        // Delete attendance records
+        await attendance_record_1.default.destroy({
+            where: { studentId: id },
+            transaction: t,
+        });
+        // Delete practicums
+        await practicum_1.default.destroy({
+            where: { studentId: id },
+            transaction: t,
+        });
+        // Finally, delete the user
+        await student.destroy({ transaction: t });
+        await t.commit();
+        return { success: true };
+    }
+    catch (error) {
+        await t.rollback();
+        throw error;
+    }
+};
+exports.hardDeleteStudentData = hardDeleteStudentData;

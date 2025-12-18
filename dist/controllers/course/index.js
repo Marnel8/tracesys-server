@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteCourseController = exports.updateCourseController = exports.getCourseController = exports.getCoursesController = exports.createCourseController = void 0;
+exports.hardDeleteCourseController = exports.restoreCourseController = exports.getArchivedCoursesController = exports.deleteCourseController = exports.updateCourseController = exports.getCourseController = exports.getCoursesController = exports.createCourseController = void 0;
 const http_status_codes_1 = require("http-status-codes");
 const error_1 = require("../../utils/error.js");
 const course_1 = require("../../data/course.js");
@@ -90,3 +90,49 @@ const deleteCourseController = async (req, res) => {
     });
 };
 exports.deleteCourseController = deleteCourseController;
+const getArchivedCoursesController = async (req, res) => {
+    const { page = 1, limit = 10, search = "" } = req.query;
+    const result = await (0, course_1.getArchivedCoursesData)({
+        page: Number(page),
+        limit: Number(limit),
+        search: search,
+    });
+    res.status(http_status_codes_1.StatusCodes.OK).json({
+        success: true,
+        data: result,
+    });
+};
+exports.getArchivedCoursesController = getArchivedCoursesController;
+const restoreCourseController = async (req, res) => {
+    const { id } = req.params;
+    if (!id) {
+        throw new error_1.BadRequestError("Course ID is required.");
+    }
+    const course = await (0, course_1.restoreCourseData)(id);
+    res.status(http_status_codes_1.StatusCodes.OK).json({
+        success: true,
+        message: "Course restored successfully",
+        data: course,
+    });
+};
+exports.restoreCourseController = restoreCourseController;
+const hardDeleteCourseController = async (req, res) => {
+    try {
+        const { id } = req.params;
+        if (!id) {
+            throw new error_1.BadRequestError("Course ID is required.");
+        }
+        await (0, course_1.hardDeleteCourseData)(id);
+        res.status(http_status_codes_1.StatusCodes.OK).json({
+            success: true,
+            message: "Course permanently deleted successfully",
+        });
+    }
+    catch (error) {
+        res.status(error.statusCode || http_status_codes_1.StatusCodes.INTERNAL_SERVER_ERROR).json({
+            success: false,
+            message: error.message || "Failed to permanently delete course",
+        });
+    }
+};
+exports.hardDeleteCourseController = hardDeleteCourseController;

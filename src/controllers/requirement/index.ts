@@ -18,6 +18,9 @@ import {
 	createRequirementCommentData,
 	getRequirementCommentsData,
 	getStudentUnreadCommentsData,
+	getArchivedRequirementsData,
+	restoreRequirementData,
+	hardDeleteRequirementData,
 } from "@/data/requirement";
 import { logStudentAction } from "@/utils/audit-logger";
 
@@ -304,10 +307,63 @@ export const updateRequirementDueDateController = async (req: Request, res: Resp
 		},
 	});
 	
+		res.status(StatusCodes.OK).json({
+			success: true,
+			message: "Requirement due date updated",
+			data: result,
+		});
+	};
+
+export const getArchivedRequirementsController = async (req: Request, res: Response) => {
+	const { page = 1, limit = 10, search = "" } = req.query;
+
+	const result = await getArchivedRequirementsData({
+		page: Number(page),
+		limit: Number(limit),
+		search: search as string,
+	});
+
 	res.status(StatusCodes.OK).json({
 		success: true,
-		message: "Requirement due date updated",
 		data: result,
 	});
+};
+
+export const restoreRequirementController = async (req: Request, res: Response) => {
+	const { id } = req.params;
+
+	if (!id) {
+		throw new BadRequestError("Requirement ID is required.");
+	}
+
+	const requirement = await restoreRequirementData(id);
+
+	res.status(StatusCodes.OK).json({
+		success: true,
+		message: "Requirement restored successfully",
+		data: requirement,
+	});
+};
+
+export const hardDeleteRequirementController = async (req: Request, res: Response) => {
+	try {
+		const { id } = req.params;
+
+		if (!id) {
+			throw new BadRequestError("Requirement ID is required.");
+		}
+
+		await hardDeleteRequirementData(id);
+
+		res.status(StatusCodes.OK).json({
+			success: true,
+			message: "Requirement permanently deleted successfully",
+		});
+	} catch (error: any) {
+		res.status(error.statusCode || StatusCodes.INTERNAL_SERVER_ERROR).json({
+			success: false,
+			message: error.message || "Failed to permanently delete requirement",
+		});
+	}
 };
 

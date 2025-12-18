@@ -394,4 +394,31 @@ export const getReportStatsData = async (studentId: string) => {
 	};
 };
 
+// Archive functions - NOTE: Reports currently don't have soft delete.
+// These functions return empty results until soft delete is implemented.
+// To implement: Add a deletedAt field or isActive flag to the Report model.
+export const getArchivedReportsData = async (params: {
+	page: number;
+	limit: number;
+	search: string;
+}) => {
+	// Return empty results until soft delete is implemented
+	return {
+		items: [],
+		pagination: {
+			currentPage: params.page,
+			totalPages: 0,
+			totalItems: 0,
+			itemsPerPage: params.limit,
+		},
+	};
+};
+
+export const restoreReportData = async (id: string) => {
+	throw new Error("Report restore is not yet implemented. Add soft delete support first.");
+};
+
+export const hardDeleteReportData = async (id: string) => {
+	throw new Error("Report hard delete is not yet implemented. Add soft delete support first.");
+};
 

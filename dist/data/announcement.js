@@ -3,8 +3,9 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getAnnouncementStats = exports.deleteAnnouncementCommentData = exports.getAnnouncementCommentsData = exports.createAnnouncementCommentData = exports.toggleAnnouncementPin = exports.incrementAnnouncementViews = exports.deleteAnnouncementData = exports.updateAnnouncementData = exports.findAnnouncementByID = exports.getAnnouncementsData = exports.createAnnouncementData = void 0;
+exports.getAnnouncementStats = exports.deleteAnnouncementCommentData = exports.getAnnouncementCommentsData = exports.createAnnouncementCommentData = exports.toggleAnnouncementPin = exports.incrementAnnouncementViews = exports.hardDeleteAnnouncementData = exports.restoreAnnouncementData = exports.getArchivedAnnouncementsData = exports.deleteAnnouncementData = exports.updateAnnouncementData = exports.findAnnouncementByID = exports.getAnnouncementsData = exports.createAnnouncementData = void 0;
 const sequelize_1 = require("sequelize");
+const db_1 = __importDefault(require("../db/index.js"));
 const announcement_1 = __importDefault(require("../db/models/announcement.js"));
 const user_1 = __importDefault(require("../db/models/user.js"));
 const announcement_target_1 = __importDefault(require("../db/models/announcement-target.js"));
@@ -13,6 +14,8 @@ const student_enrollment_1 = __importDefault(require("../db/models/student-enrol
 const section_1 = __importDefault(require("../db/models/section.js"));
 const course_1 = __importDefault(require("../db/models/course.js"));
 const department_1 = __importDefault(require("../db/models/department.js"));
+const audit_log_1 = __importDefault(require("../db/models/audit-log.js"));
+const error_1 = require("../utils/error.js");
 const createAnnouncementData = async (data) => {
     try {
         const announcement = await announcement_1.default.create({
@@ -342,21 +345,157 @@ const deleteAnnouncementData = async (id) => {
         if (!announcement) {
             throw new Error("Announcement not found");
         }
-        // Delete related targets and comments first
-        await announcement_target_1.default.destroy({
-            where: { announcementId: id },
-        });
-        await announcement_comment_1.default.destroy({
-            where: { announcementId: id },
-        });
-        await announcement.destroy();
-        return true;
+        // Soft delete by setting status to "Archived"
+        await announcement.update({ status: "Archived" });
+        return announcement;
     }
     catch (error) {
         throw new Error(error.message || "Failed to delete announcement");
     }
 };
 exports.deleteAnnouncementData = deleteAnnouncementData;
+const getArchivedAnnouncementsData = async (params) => {
+    try {
+        const { page, limit, search } = params;
+        const offset = (page - 1) * limit;
+        const whereClause = {
+            status: "Archived", // Only include archived announcements
+        };
+        if (search) {
+            whereClause[sequelize_1.Op.or] = [
+                { title: { [sequelize_1.Op.like]: `%${search}%` } },
+                { content: { [sequelize_1.Op.like]: `%${search}%` } },
+            ];
+        }
+        const { count, rows: announcements } = await announcement_1.default.findAndCountAll({
+            where: whereClause,
+            include: [
+                {
+                    model: user_1.default,
+                    as: "author",
+                    attributes: ["id", "firstName", "lastName", "email"],
+                },
+            ],
+            limit,
+            offset,
+            order: [["updatedAt", "DESC"]],
+        });
+        // Look up who deleted each announcement from the audit logs
+        const announcementIds = announcements.map((a) => a.id);
+        let deletedByMap = {};
+        if (announcementIds.length > 0) {
+            const deletionLogs = await audit_log_1.default.findAll({
+                where: {
+                    resource: "System",
+                    action: "System Operation",
+                    resourceId: { [sequelize_1.Op.in]: announcementIds },
+                },
+                include: [
+                    {
+                        model: user_1.default,
+                        as: "user",
+                        attributes: ["id", "firstName", "lastName", "email"],
+                    },
+                ],
+                order: [["createdAt", "DESC"]],
+            });
+            for (const log of deletionLogs) {
+                const aid = log.resourceId;
+                if (!aid)
+                    continue;
+                if (deletedByMap[aid])
+                    continue;
+                const deleter = log.user;
+                if (deleter) {
+                    const fullName = `${deleter.firstName ?? ""} ${deleter.lastName ?? ""}`.trim();
+                    deletedByMap[aid] = fullName || deleter.email || "Unknown";
+                }
+                else {
+                    deletedByMap[aid] = "Unknown";
+                }
+            }
+        }
+        // Transform to archive format
+        const items = announcements.map((announcement) => ({
+            id: announcement.id,
+            type: "announcement",
+            name: announcement.title,
+            deletedAt: announcement.updatedAt.toISOString(),
+            deletedBy: deletedByMap[announcement.id] ?? null,
+            meta: {
+                author: announcement.author ? `${announcement.author.firstName} ${announcement.author.lastName}` : null,
+                priority: announcement.priority,
+            },
+            raw: announcement.toJSON(),
+        }));
+        return {
+            items,
+            pagination: {
+                currentPage: page,
+                totalPages: Math.ceil(count / limit),
+                totalItems: count,
+                itemsPerPage: limit,
+            },
+        };
+    }
+    catch (error) {
+        throw new Error(error.message || "Failed to retrieve archived announcements");
+    }
+};
+exports.getArchivedAnnouncementsData = getArchivedAnnouncementsData;
+const restoreAnnouncementData = async (id) => {
+    const t = await db_1.default.transaction();
+    try {
+        const announcement = await announcement_1.default.findOne({
+            where: { id, status: "Archived" },
+            transaction: t,
+        });
+        if (!announcement) {
+            await t.rollback();
+            throw new error_1.NotFoundError("Archived announcement not found.");
+        }
+        // Restore by setting status to "Published"
+        await announcement.update({ status: "Published" }, { transaction: t });
+        await t.commit();
+        return announcement;
+    }
+    catch (error) {
+        await t.rollback();
+        throw error;
+    }
+};
+exports.restoreAnnouncementData = restoreAnnouncementData;
+const hardDeleteAnnouncementData = async (id) => {
+    const t = await db_1.default.transaction();
+    try {
+        const announcement = await announcement_1.default.findOne({
+            where: { id, status: "Archived" },
+            transaction: t,
+        });
+        if (!announcement) {
+            await t.rollback();
+            throw new error_1.NotFoundError("Archived announcement not found.");
+        }
+        // Delete related targets and comments first
+        await announcement_target_1.default.destroy({
+            where: { announcementId: id },
+            transaction: t,
+        });
+        await announcement_comment_1.default.destroy({
+            where: { announcementId: id },
+            transaction: t,
+        });
+        // Finally, delete the announcement
+        await announcement.destroy({ transaction: t });
+        await t.commit();
+        return { success: true };
+    }
+    catch (error) {
+        await t.rollback();
+        throw error;
+    }
+};
+exports.hardDeleteAnnouncementData = hardDeleteAnnouncementData;
 const incrementAnnouncementViews = async (id) => {
     try {
         const announcement = await announcement_1.default.findByPk(id);

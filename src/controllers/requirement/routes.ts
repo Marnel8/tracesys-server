@@ -14,6 +14,9 @@ import {
 	createRequirementCommentController,
 	getRequirementCommentsController,
 	getStudentRequirementCommentsController,
+	getArchivedRequirementsController,
+	restoreRequirementController,
+	hardDeleteRequirementController,
 } from ".";
 
 const router = Router();
@@ -27,6 +30,11 @@ router.post(
 
 // List requirements
 router.get("/requirements", isAuthenticated, getRequirementsController);
+
+// Archive endpoints (must come before /requirements/:id to avoid route conflicts)
+router.get("/requirements/archives", isAuthenticated, getArchivedRequirementsController);
+router.post("/requirements/:id/restore", isAuthenticated, restoreRequirementController);
+router.delete("/requirements/:id/hard-delete", isAuthenticated, hardDeleteRequirementController);
 
 // List requirements scoped to instructor
 router.get(

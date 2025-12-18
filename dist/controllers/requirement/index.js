@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateRequirementDueDateController = exports.getStudentRequirementCommentsController = exports.getRequirementCommentsController = exports.createRequirementCommentController = exports.getRequirementStatsController = exports.rejectRequirementController = exports.approveRequirementController = exports.submitRequirementController = exports.getRequirementController = exports.getInstructorRequirementsController = exports.getRequirementsController = exports.createRequirementFromTemplateController = void 0;
+exports.hardDeleteRequirementController = exports.restoreRequirementController = exports.getArchivedRequirementsController = exports.updateRequirementDueDateController = exports.getStudentRequirementCommentsController = exports.getRequirementCommentsController = exports.createRequirementCommentController = exports.getRequirementStatsController = exports.rejectRequirementController = exports.approveRequirementController = exports.submitRequirementController = exports.getRequirementController = exports.getInstructorRequirementsController = exports.getRequirementsController = exports.createRequirementFromTemplateController = void 0;
 const path_1 = __importDefault(require("path"));
 const http_status_codes_1 = require("http-status-codes");
 const error_1 = require("../../utils/error.js");
@@ -291,3 +291,49 @@ const updateRequirementDueDateController = async (req, res) => {
     });
 };
 exports.updateRequirementDueDateController = updateRequirementDueDateController;
+const getArchivedRequirementsController = async (req, res) => {
+    const { page = 1, limit = 10, search = "" } = req.query;
+    const result = await (0, requirement_2.getArchivedRequirementsData)({
+        page: Number(page),
+        limit: Number(limit),
+        search: search,
+    });
+    res.status(http_status_codes_1.StatusCodes.OK).json({
+        success: true,
+        data: result,
+    });
+};
+exports.getArchivedRequirementsController = getArchivedRequirementsController;
+const restoreRequirementController = async (req, res) => {
+    const { id } = req.params;
+    if (!id) {
+        throw new error_1.BadRequestError("Requirement ID is required.");
+    }
+    const requirement = await (0, requirement_2.restoreRequirementData)(id);
+    res.status(http_status_codes_1.StatusCodes.OK).json({
+        success: true,
+        message: "Requirement restored successfully",
+        data: requirement,
+    });
+};
+exports.restoreRequirementController = restoreRequirementController;
+const hardDeleteRequirementController = async (req, res) => {
+    try {
+        const { id } = req.params;
+        if (!id) {
+            throw new error_1.BadRequestError("Requirement ID is required.");
+        }
+        await (0, requirement_2.hardDeleteRequirementData)(id);
+        res.status(http_status_codes_1.StatusCodes.OK).json({
+            success: true,
+            message: "Requirement permanently deleted successfully",
+        });
+    }
+    catch (error) {
+        res.status(error.statusCode || http_status_codes_1.StatusCodes.INTERNAL_SERVER_ERROR).json({
+            success: false,
+            message: error.message || "Failed to permanently delete requirement",
+        });
+    }
+};
+exports.hardDeleteRequirementController = hardDeleteRequirementController;

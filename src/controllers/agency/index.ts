@@ -16,7 +16,10 @@ import {
 	findSupervisorByID,
 	updateSupervisorData,
 	deleteSupervisorData,
-	getAgencySupervisorStats
+	getAgencySupervisorStats,
+	getArchivedAgenciesData,
+	restoreAgencyData,
+	hardDeleteAgencyData
 } from "@/data/agency";
 import { logAuditEvent } from "@/middlewares/audit";
 
@@ -229,6 +232,59 @@ export const deleteAgencyController = async (req: Request, res: Response) => {
 		success: true,
 		message: "Agency deleted successfully",
 	});
+};
+
+export const getArchivedAgenciesController = async (req: Request, res: Response) => {
+	const { page = 1, limit = 10, search = "" } = req.query;
+
+	const result = await getArchivedAgenciesData({
+		page: Number(page),
+		limit: Number(limit),
+		search: search as string,
+	});
+
+	res.status(StatusCodes.OK).json({
+		success: true,
+		data: result,
+	});
+};
+
+export const restoreAgencyController = async (req: Request, res: Response) => {
+	const { id } = req.params;
+
+	if (!id) {
+		throw new BadRequestError("Agency ID is required.");
+	}
+
+	const agency = await restoreAgencyData(id);
+
+	res.status(StatusCodes.OK).json({
+		success: true,
+		message: "Agency restored successfully",
+		data: agency,
+	});
+};
+
+export const hardDeleteAgencyController = async (req: Request, res: Response) => {
+	try {
+		const { id } = req.params;
+
+		if (!id) {
+			throw new BadRequestError("Agency ID is required.");
+		}
+
+		await hardDeleteAgencyData(id);
+
+		res.status(StatusCodes.OK).json({
+			success: true,
+			message: "Agency permanently deleted successfully",
+		});
+	} catch (error: any) {
+		res.status(error.statusCode || StatusCodes.INTERNAL_SERVER_ERROR).json({
+			success: false,
+			message: error.message || "Failed to permanently delete agency",
+		});
+	}
 };
 
 // Supervisor Management Controllers

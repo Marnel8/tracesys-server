@@ -494,3 +494,31 @@ export const getStudentUnreadCommentsData = async (
 	return comments;
 };
 
+// Archive functions - NOTE: Requirements currently don't have soft delete.
+// These functions return empty results until soft delete is implemented.
+// To implement: Add a deletedAt field or isActive flag to the Requirement model.
+export const getArchivedRequirementsData = async (params: {
+	page: number;
+	limit: number;
+	search: string;
+}) => {
+	// Return empty results until soft delete is implemented
+	return {
+		items: [],
+		pagination: {
+			currentPage: params.page,
+			totalPages: 0,
+			totalItems: 0,
+			itemsPerPage: params.limit,
+		},
+	};
+};
+
+export const restoreRequirementData = async (id: string) => {
+	throw new Error("Requirement restore is not yet implemented. Add soft delete support first.");
+};
+
+export const hardDeleteRequirementData = async (id: string) => {
+	throw new Error("Requirement hard delete is not yet implemented. Add soft delete support first.");
+};
+

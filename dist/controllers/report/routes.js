@@ -14,6 +14,10 @@ router.post("/reports/from-template", auth_1.isAuthenticated, _1.createReportFro
 router.post("/reports", auth_1.isAuthenticated, _1.createReportController);
 // List reports
 router.get("/reports", auth_1.isAuthenticated, _1.getReportsController);
+// Archive endpoints (must come before /reports/:id to avoid route conflicts)
+router.get("/reports/archives", auth_1.isAuthenticated, _1.getArchivedReportsController);
+router.post("/reports/:id/restore", auth_1.isAuthenticated, _1.restoreReportController);
+router.delete("/reports/:id/hard-delete", auth_1.isAuthenticated, _1.hardDeleteReportController);
 // List reports scoped to instructor
 router.get("/instructor/reports", auth_1.isAuthenticated, (0, auth_1.authorizeRoles)("instructor"), _1.getInstructorReportsController);
 // Narrative reports (convenience endpoints)

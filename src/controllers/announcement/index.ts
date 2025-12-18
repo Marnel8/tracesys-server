@@ -16,7 +16,10 @@ import {
 	deleteAnnouncementCommentData,
 	incrementAnnouncementViews,
 	toggleAnnouncementPin,
-	getAnnouncementStats
+	getAnnouncementStats,
+	getArchivedAnnouncementsData,
+	restoreAnnouncementData,
+	hardDeleteAnnouncementData
 } from "@/data/announcement";
 
 // Announcement data interface
@@ -292,4 +295,57 @@ export const deleteAnnouncementCommentController = async (req: Request, res: Res
 		success: true,
 		message: "Comment deleted successfully",
 	});
+};
+
+export const getArchivedAnnouncementsController = async (req: Request, res: Response) => {
+	const { page = 1, limit = 10, search = "" } = req.query;
+
+	const result = await getArchivedAnnouncementsData({
+		page: Number(page),
+		limit: Number(limit),
+		search: search as string,
+	});
+
+	res.status(StatusCodes.OK).json({
+		success: true,
+		data: result,
+	});
+};
+
+export const restoreAnnouncementController = async (req: Request, res: Response) => {
+	const { id } = req.params;
+
+	if (!id) {
+		throw new BadRequestError("Announcement ID is required.");
+	}
+
+	const announcement = await restoreAnnouncementData(id);
+
+	res.status(StatusCodes.OK).json({
+		success: true,
+		message: "Announcement restored successfully",
+		data: announcement,
+	});
+};
+
+export const hardDeleteAnnouncementController = async (req: Request, res: Response) => {
+	try {
+		const { id } = req.params;
+
+		if (!id) {
+			throw new BadRequestError("Announcement ID is required.");
+		}
+
+		await hardDeleteAnnouncementData(id);
+
+		res.status(StatusCodes.OK).json({
+			success: true,
+			message: "Announcement permanently deleted successfully",
+		});
+	} catch (error: any) {
+		res.status(error.statusCode || StatusCodes.INTERNAL_SERVER_ERROR).json({
+			success: false,
+			message: error.message || "Failed to permanently delete announcement",
+		});
+	}
 };

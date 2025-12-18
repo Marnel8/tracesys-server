@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteStudentController = exports.updateStudentController = exports.getStudentController = exports.getStudentsByTeacherController = exports.getStudentsController = exports.createStudentController = void 0;
+exports.hardDeleteStudentController = exports.restoreStudentController = exports.getArchivedStudentsController = exports.deleteStudentController = exports.updateStudentController = exports.getStudentController = exports.getStudentsByTeacherController = exports.getStudentsController = exports.createStudentController = void 0;
 const http_status_codes_1 = require("http-status-codes");
 const error_1 = require("../../utils/error.js");
 const student_1 = require("../../data/student.js");
@@ -166,6 +166,52 @@ const deleteStudentController = async (req, res) => {
     }
 };
 exports.deleteStudentController = deleteStudentController;
+const getArchivedStudentsController = async (req, res) => {
+    const { page = 1, limit = 10, search = "" } = req.query;
+    const result = await (0, student_1.getArchivedStudentsData)({
+        page: Number(page),
+        limit: Number(limit),
+        search: search,
+    });
+    res.status(http_status_codes_1.StatusCodes.OK).json({
+        success: true,
+        data: result,
+    });
+};
+exports.getArchivedStudentsController = getArchivedStudentsController;
+const restoreStudentController = async (req, res) => {
+    const { id } = req.params;
+    if (!id) {
+        throw new error_1.BadRequestError("Student ID is required.");
+    }
+    const student = await (0, student_1.restoreStudentData)(id);
+    res.status(http_status_codes_1.StatusCodes.OK).json({
+        success: true,
+        message: "Student restored successfully",
+        data: student,
+    });
+};
+exports.restoreStudentController = restoreStudentController;
+const hardDeleteStudentController = async (req, res) => {
+    try {
+        const { id } = req.params;
+        if (!id) {
+            throw new error_1.BadRequestError("Student ID is required.");
+        }
+        await (0, student_1.hardDeleteStudentData)(id);
+        res.status(http_status_codes_1.StatusCodes.OK).json({
+            success: true,
+            message: "Student permanently deleted successfully",
+        });
+    }
+    catch (error) {
+        res.status(error.statusCode || http_status_codes_1.StatusCodes.INTERNAL_SERVER_ERROR).json({
+            success: false,
+            message: error.message || "Failed to permanently delete student",
+        });
+    }
+};
+exports.hardDeleteStudentController = hardDeleteStudentController;
 // Helper function to send student credentials
 const sendStudentCredentials = async (user, password) => {
     try {

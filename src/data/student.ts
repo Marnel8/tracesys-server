@@ -8,8 +8,11 @@ import Supervisor from "@/db/models/supervisor";
 import Practicum from "@/db/models/practicum";
 import RequirementTemplate from "@/db/models/requirement-template";
 import Requirement from "@/db/models/requirement";
+import RequirementComment from "@/db/models/requirement-comment";
 import AttendanceRecord from "@/db/models/attendance-record";
 import Invitation from "@/db/models/invitation";
+import AuditLog from "@/db/models/audit-log";
+import Report from "@/db/models/report";
 import { ConflictError, NotFoundError } from "@/utils/error";
 import { Op } from "sequelize";
 import StudentEnrollment from "@/db/models/student-enrollment";
@@ -1201,6 +1204,201 @@ export const getStudentsByTeacherData = async (params: {
     };
   } catch (error) {
     console.error("Error in getStudentsByTeacherData:", error);
+    throw error;
+  }
+};
+
+export const getArchivedStudentsData = async (params: {
+  page: number;
+  limit: number;
+  search: string;
+}) => {
+  const { page, limit, search } = params;
+  const offset = (page - 1) * limit;
+
+  const whereClause: any = {
+    role: UserRole.STUDENT,
+    isActive: false, // Only include archived (inactive) students
+  };
+
+  if (search) {
+    whereClause[Op.or] = [
+      { firstName: { [Op.like]: `%${search}%` } },
+      { lastName: { [Op.like]: `%${search}%` } },
+      { email: { [Op.like]: `%${search}%` } },
+      { studentId: { [Op.like]: `%${search}%` } },
+    ];
+  }
+
+  const { count, rows: students } = await User.findAndCountAll({
+    where: whereClause,
+    include: [
+      {
+        model: Department,
+        as: "department",
+      },
+    ],
+    limit,
+    offset,
+    order: [["updatedAt", "DESC"]], // Order by updatedAt (deletion time)
+  });
+
+  // Look up who deleted each student from the audit logs
+  const studentIds = students.map((s) => s.id);
+  let deletedByMap: Record<string, string> = {};
+
+  if (studentIds.length > 0) {
+    const deletionLogs = await AuditLog.findAll({
+      where: {
+        resource: "User Management",
+        action: "User Deleted",
+        resourceId: { [Op.in]: studentIds },
+      },
+      include: [
+        {
+          model: User,
+          as: "user",
+          attributes: ["id", "firstName", "lastName", "email"],
+        },
+      ],
+      order: [["createdAt", "DESC"]],
+    });
+
+    // Keep the most recent deletion log per student
+    for (const log of deletionLogs as any[]) {
+      const sid = log.resourceId as string;
+      if (!sid) continue;
+      if (deletedByMap[sid]) continue; // already have latest due to DESC order
+
+      const deleter = log.user as User | undefined;
+      if (deleter) {
+        const fullName = `${deleter.firstName ?? ""} ${deleter.lastName ?? ""}`.trim();
+        deletedByMap[sid] = fullName || deleter.email || "Unknown";
+      } else {
+        deletedByMap[sid] = "Unknown";
+      }
+    }
+  }
+
+  // Transform to archive format
+  const items = students.map((student) => ({
+    id: student.id,
+    type: "student" as const,
+    name: `${student.firstName} ${student.lastName}`.trim(),
+    deletedAt: student.updatedAt.toISOString(), // Use updatedAt as deletion timestamp
+    deletedBy: deletedByMap[student.id] ?? null,
+    meta: {
+      email: student.email,
+      studentId: student.studentId,
+      department: student.department?.name,
+    },
+    raw: student.toJSON(),
+  }));
+
+  return {
+    items,
+    pagination: {
+      currentPage: page,
+      totalPages: Math.ceil(count / limit),
+      totalItems: count,
+      itemsPerPage: limit,
+    },
+  };
+};
+
+export const restoreStudentData = async (id: string) => {
+  const t = await sequelize.transaction();
+
+  try {
+    const student = await User.findOne({
+      where: { id, role: UserRole.STUDENT, isActive: false },
+      transaction: t,
+    });
+
+    if (!student) {
+      await t.rollback();
+      throw new NotFoundError("Archived student not found.");
+    }
+
+    // Restore by setting isActive to true
+    await student.update({ isActive: true }, { transaction: t });
+
+    await t.commit();
+
+    return student;
+  } catch (error) {
+    await t.rollback();
+    throw error;
+  }
+};
+
+export const hardDeleteStudentData = async (id: string) => {
+  const t = await sequelize.transaction();
+
+  try {
+    const student = await User.findOne({
+      where: { id, role: UserRole.STUDENT, isActive: false },
+      transaction: t,
+    });
+
+    if (!student) {
+      await t.rollback();
+      throw new NotFoundError("Archived student not found.");
+    }
+
+    // Delete related records first
+    await StudentEnrollment.destroy({
+      where: { studentId: id },
+      transaction: t,
+    });
+
+    // Delete requirements and their comments
+    const requirementIds = await Requirement.findAll({
+      where: { studentId: id },
+      attributes: ["id"],
+      transaction: t,
+    });
+    
+    if (requirementIds.length > 0) {
+      await RequirementComment.destroy({
+        where: {
+          requirementId: { [Op.in]: requirementIds.map((r) => r.id) },
+        },
+        transaction: t,
+      });
+    }
+    
+    await Requirement.destroy({
+      where: { studentId: id },
+      transaction: t,
+    });
+
+    // Delete reports
+    await Report.destroy({
+      where: { studentId: id },
+      transaction: t,
+    });
+
+    // Delete attendance records
+    await AttendanceRecord.destroy({
+      where: { studentId: id },
+      transaction: t,
+    });
+
+    // Delete practicums
+    await Practicum.destroy({
+      where: { studentId: id },
+      transaction: t,
+    });
+
+    // Finally, delete the user
+    await student.destroy({ transaction: t });
+
+    await t.commit();
+
+    return { success: true };
+  } catch (error) {
+    await t.rollback();
     throw error;
   }
 };

@@ -5,6 +5,9 @@ import {
 	getAgencyController,
 	updateAgencyController,
 	deleteAgencyController,
+	getArchivedAgenciesController,
+	restoreAgencyController,
+	hardDeleteAgencyController,
 	createSupervisorController,
 	getSupervisorsController,
 	getSupervisorController,
@@ -13,6 +16,7 @@ import {
 	getAgencySupervisorStatsController,
 } from ".";
 import { isAuthenticated } from "@/middlewares/auth";
+import { auditMiddlewares } from "@/middlewares/audit";
 
 const router = Router();
 
@@ -22,6 +26,11 @@ router.post("/agency/", isAuthenticated, createAgencyController);
 // Get all agencies with pagination and search
 router.get("/agency/", isAuthenticated, getAgenciesController);
 
+// Archive endpoints (must come before /agency/:id to avoid route conflicts)
+router.get("/agency/archives", isAuthenticated, getArchivedAgenciesController);
+router.post("/agency/:id/restore", isAuthenticated, restoreAgencyController);
+router.delete("/agency/:id/hard-delete", isAuthenticated, hardDeleteAgencyController);
+
 // Get single agency by ID
 router.get("/agency/:id", isAuthenticated, getAgencyController);
 
@@ -29,7 +38,12 @@ router.get("/agency/:id", isAuthenticated, getAgencyController);
 router.put("/agency/:id", isAuthenticated, updateAgencyController);
 
 // Delete agency by ID
-router.delete("/agency/:id", isAuthenticated, deleteAgencyController);
+router.delete(
+	"/agency/:id",
+	isAuthenticated,
+	auditMiddlewares.agencyDelete,
+	deleteAgencyController
+);
 
 // Supervisor Management Routes
 

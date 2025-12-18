@@ -15,6 +15,9 @@ import {
 	listNarrativeReportsController,
 	logReportViewController,
 	getStudentReportViewNotificationsController,
+	getArchivedReportsController,
+	restoreReportController,
+	hardDeleteReportController,
 } from ".";
 
 const router = Router();
@@ -35,6 +38,11 @@ router.post(
 
 // List reports
 router.get("/reports", isAuthenticated, getReportsController);
+
+// Archive endpoints (must come before /reports/:id to avoid route conflicts)
+router.get("/reports/archives", isAuthenticated, getArchivedReportsController);
+router.post("/reports/:id/restore", isAuthenticated, restoreReportController);
+router.delete("/reports/:id/hard-delete", isAuthenticated, hardDeleteReportController);
 
 // List reports scoped to instructor
 router.get(

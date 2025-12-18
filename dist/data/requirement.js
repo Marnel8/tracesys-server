@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getStudentUnreadCommentsData = exports.getRequirementCommentsData = exports.createRequirementCommentData = exports.getRequirementStatsData = exports.updateRequirementDueDateData = exports.rejectRequirementData = exports.approveRequirementData = exports.updateRequirementFileData = exports.findRequirementByID = exports.getRequirementsData = exports.createRequirementFromTemplateData = void 0;
+exports.hardDeleteRequirementData = exports.restoreRequirementData = exports.getArchivedRequirementsData = exports.getStudentUnreadCommentsData = exports.getRequirementCommentsData = exports.createRequirementCommentData = exports.getRequirementStatsData = exports.updateRequirementDueDateData = exports.rejectRequirementData = exports.approveRequirementData = exports.updateRequirementFileData = exports.findRequirementByID = exports.getRequirementsData = exports.createRequirementFromTemplateData = void 0;
 const sequelize_1 = require("sequelize");
 const requirement_1 = __importDefault(require("../db/models/requirement.js"));
 const requirement_template_1 = __importDefault(require("../db/models/requirement-template.js"));
@@ -417,3 +417,27 @@ const getStudentUnreadCommentsData = async (studentId, lastCheckTime) => {
     return comments;
 };
 exports.getStudentUnreadCommentsData = getStudentUnreadCommentsData;
+// Archive functions - NOTE: Requirements currently don't have soft delete.
+// These functions return empty results until soft delete is implemented.
+// To implement: Add a deletedAt field or isActive flag to the Requirement model.
+const getArchivedRequirementsData = async (params) => {
+    // Return empty results until soft delete is implemented
+    return {
+        items: [],
+        pagination: {
+            currentPage: params.page,
+            totalPages: 0,
+            totalItems: 0,
+            itemsPerPage: params.limit,
+        },
+    };
+};
+exports.getArchivedRequirementsData = getArchivedRequirementsData;
+const restoreRequirementData = async (id) => {
+    throw new Error("Requirement restore is not yet implemented. Add soft delete support first.");
+};
+exports.restoreRequirementData = restoreRequirementData;
+const hardDeleteRequirementData = async (id) => {
+    throw new Error("Requirement hard delete is not yet implemented. Add soft delete support first.");
+};
+exports.hardDeleteRequirementData = hardDeleteRequirementData;

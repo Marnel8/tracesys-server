@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getAgencySupervisorStatsController = exports.deleteSupervisorController = exports.updateSupervisorController = exports.getSupervisorController = exports.getSupervisorsController = exports.createSupervisorController = exports.deleteAgencyController = exports.updateAgencyController = exports.getAgencyController = exports.getAgenciesController = exports.createAgencyController = void 0;
+exports.getAgencySupervisorStatsController = exports.deleteSupervisorController = exports.updateSupervisorController = exports.getSupervisorController = exports.getSupervisorsController = exports.createSupervisorController = exports.hardDeleteAgencyController = exports.restoreAgencyController = exports.getArchivedAgenciesController = exports.deleteAgencyController = exports.updateAgencyController = exports.getAgencyController = exports.getAgenciesController = exports.createAgencyController = void 0;
 const http_status_codes_1 = require("http-status-codes");
 const error_1 = require("../../utils/error.js");
 const agency_1 = require("../../data/agency.js");
@@ -144,6 +144,52 @@ const deleteAgencyController = async (req, res) => {
     });
 };
 exports.deleteAgencyController = deleteAgencyController;
+const getArchivedAgenciesController = async (req, res) => {
+    const { page = 1, limit = 10, search = "" } = req.query;
+    const result = await (0, agency_1.getArchivedAgenciesData)({
+        page: Number(page),
+        limit: Number(limit),
+        search: search,
+    });
+    res.status(http_status_codes_1.StatusCodes.OK).json({
+        success: true,
+        data: result,
+    });
+};
+exports.getArchivedAgenciesController = getArchivedAgenciesController;
+const restoreAgencyController = async (req, res) => {
+    const { id } = req.params;
+    if (!id) {
+        throw new error_1.BadRequestError("Agency ID is required.");
+    }
+    const agency = await (0, agency_1.restoreAgencyData)(id);
+    res.status(http_status_codes_1.StatusCodes.OK).json({
+        success: true,
+        message: "Agency restored successfully",
+        data: agency,
+    });
+};
+exports.restoreAgencyController = restoreAgencyController;
+const hardDeleteAgencyController = async (req, res) => {
+    try {
+        const { id } = req.params;
+        if (!id) {
+            throw new error_1.BadRequestError("Agency ID is required.");
+        }
+        await (0, agency_1.hardDeleteAgencyData)(id);
+        res.status(http_status_codes_1.StatusCodes.OK).json({
+            success: true,
+            message: "Agency permanently deleted successfully",
+        });
+    }
+    catch (error) {
+        res.status(error.statusCode || http_status_codes_1.StatusCodes.INTERNAL_SERVER_ERROR).json({
+            success: false,
+            message: error.message || "Failed to permanently delete agency",
+        });
+    }
+};
+exports.hardDeleteAgencyController = hardDeleteAgencyController;
 // Supervisor Management Controllers
 const createSupervisorController = async (req, res) => {
     const { agencyId, name, email, phone, position, department, isActive = true, } = req.body;

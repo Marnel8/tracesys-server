@@ -14,8 +14,13 @@ import {
 	getReportStatsData,
 	createReportViewData,
 	getStudentReportViewNotificationsData,
+	createReportData,
+	createNarrativeReportData,
+	getNarrativeReportsData,
+	getArchivedReportsData,
+	restoreReportData,
+	hardDeleteReportData,
 } from "@/data/report";
-import { createReportData, createNarrativeReportData, getNarrativeReportsData } from "@/data/report";
 import { validateImageFile } from "@/utils/image-uploader";
 import { logStudentAction } from "@/utils/audit-logger";
 
@@ -526,5 +531,56 @@ export const getStudentReportViewNotificationsController = async (
 	});
 };
 
+export const getArchivedReportsController = async (req: Request, res: Response) => {
+	const { page = 1, limit = 10, search = "" } = req.query;
 
+	const result = await getArchivedReportsData({
+		page: Number(page),
+		limit: Number(limit),
+		search: search as string,
+	});
+
+	res.status(StatusCodes.OK).json({
+		success: true,
+		data: result,
+	});
+};
+
+export const restoreReportController = async (req: Request, res: Response) => {
+	const { id } = req.params;
+
+	if (!id) {
+		throw new BadRequestError("Report ID is required.");
+	}
+
+	const report = await restoreReportData(id);
+
+	res.status(StatusCodes.OK).json({
+		success: true,
+		message: "Report restored successfully",
+		data: report,
+	});
+};
+
+export const hardDeleteReportController = async (req: Request, res: Response) => {
+	try {
+		const { id } = req.params;
+
+		if (!id) {
+			throw new BadRequestError("Report ID is required.");
+		}
+
+		await hardDeleteReportData(id);
+
+		res.status(StatusCodes.OK).json({
+			success: true,
+			message: "Report permanently deleted successfully",
+		});
+	} catch (error: any) {
+		res.status(error.statusCode || StatusCodes.INTERNAL_SERVER_ERROR).json({
+			success: false,
+			message: error.message || "Failed to permanently delete report",
+		});
+	}
+};
 

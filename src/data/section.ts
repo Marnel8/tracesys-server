@@ -1,7 +1,12 @@
 import { Op } from "sequelize";
+import sequelize from "@/db";
 import Section from "@/db/models/section";
 import Course from "@/db/models/course";
 import Department from "@/db/models/department";
+import StudentEnrollment from "@/db/models/student-enrollment";
+import User from "@/db/models/user";
+import AuditLog from "@/db/models/audit-log";
+import { NotFoundError } from "@/utils/error";
 
 interface CreateSectionParams {
 	name: string;
@@ -199,22 +204,179 @@ export const deleteSectionData = async (id: string) => {
 			throw new Error("Section not found");
 		}
 
-		// Check if section has enrolled students
-		// Note: This would need to be implemented based on your student enrollment model
-		// const enrolledStudents = await StudentEnrollment.count({
-		// 	where: {
-		// 		sectionId: id,
-		// 	},
-		// });
+		// Soft delete by setting isActive to false
+		await section.update({ isActive: false });
 
-		// if (enrolledStudents > 0) {
-		// 	throw new Error("Cannot delete section with enrolled students");
-		// }
-
-		await section.destroy();
-
-		return true;
+		return section;
 	} catch (error: any) {
 		throw new Error(error.message || "Failed to delete section");
+	}
+};
+
+export const getArchivedSectionsData = async (params: {
+	page: number;
+	limit: number;
+	search: string;
+}) => {
+	try {
+		const { page, limit, search } = params;
+		const offset = (page - 1) * limit;
+
+		const whereClause: any = {
+			isActive: false, // Only include archived (inactive) sections
+		};
+
+		if (search) {
+			whereClause[Op.or] = [
+				{ name: { [Op.like]: `%${search}%` } },
+				{ code: { [Op.like]: `%${search}%` } },
+			];
+		}
+
+		const { count, rows: sections } = await Section.findAndCountAll({
+			where: whereClause,
+			include: [
+				{
+					model: Course,
+					as: "course",
+					include: [
+						{
+							model: Department,
+							as: "department",
+						},
+					],
+				},
+			],
+			limit,
+			offset,
+			order: [["updatedAt", "DESC"]],
+		});
+
+		// Look up who deleted each section from the audit logs
+		const sectionIds = sections.map((s) => s.id);
+		let deletedByMap: Record<string, string> = {};
+
+		if (sectionIds.length > 0) {
+			const deletionLogs = await AuditLog.findAll({
+				where: {
+					resource: "System",
+					action: "System Operation",
+					resourceId: { [Op.in]: sectionIds },
+				},
+				include: [
+					{
+						model: User,
+						as: "user",
+						attributes: ["id", "firstName", "lastName", "email"],
+					},
+				],
+				order: [["createdAt", "DESC"]],
+			});
+
+			for (const log of deletionLogs as any[]) {
+				const sid = log.resourceId as string;
+				if (!sid) continue;
+				if (deletedByMap[sid]) continue;
+
+				const deleter = log.user as User | undefined;
+				if (deleter) {
+					const fullName = `${deleter.firstName ?? ""} ${deleter.lastName ?? ""}`.trim();
+					deletedByMap[sid] = fullName || deleter.email || "Unknown";
+				} else {
+					deletedByMap[sid] = "Unknown";
+				}
+			}
+		}
+
+		// Transform to archive format
+		const items = sections.map((section) => ({
+			id: section.id,
+			type: "section" as const,
+			name: section.name,
+			deletedAt: section.updatedAt.toISOString(),
+			deletedBy: deletedByMap[section.id] ?? null,
+			meta: {
+				code: section.code,
+				course: section.course?.name,
+				courseCode: section.course?.code,
+				academicYear: section.academicYear,
+			},
+			raw: section.toJSON(),
+		}));
+
+		return {
+			items,
+			pagination: {
+				currentPage: page,
+				totalPages: Math.ceil(count / limit),
+				totalItems: count,
+				itemsPerPage: limit,
+			},
+		};
+	} catch (error: any) {
+		throw new Error(error.message || "Failed to retrieve archived sections");
+	}
+};
+
+export const restoreSectionData = async (id: string) => {
+	const t = await sequelize.transaction();
+
+	try {
+		const section = await Section.findOne({
+			where: { id, isActive: false },
+			transaction: t,
+		});
+
+		if (!section) {
+			await t.rollback();
+			throw new NotFoundError("Archived section not found.");
+		}
+
+		// Restore by setting isActive to true
+		await section.update({ isActive: true }, { transaction: t });
+
+		await t.commit();
+
+		return section;
+	} catch (error) {
+		await t.rollback();
+		throw error;
+	}
+};
+
+export const hardDeleteSectionData = async (id: string) => {
+	const t = await sequelize.transaction();
+
+	try {
+		const section = await Section.findOne({
+			where: { id, isActive: false },
+			transaction: t,
+		});
+
+		if (!section) {
+			await t.rollback();
+			throw new NotFoundError("Archived section not found.");
+		}
+
+		// Check if section has enrolled students
+		const enrolledStudents = await StudentEnrollment.count({
+			where: { sectionId: id },
+			transaction: t,
+		});
+
+		if (enrolledStudents > 0) {
+			await t.rollback();
+			throw new Error("Cannot permanently delete section with enrolled students");
+		}
+
+		// Finally, delete the section
+		await section.destroy({ transaction: t });
+
+		await t.commit();
+
+		return { success: true };
+	} catch (error) {
+		await t.rollback();
+		throw error;
 	}
 };

@@ -6,9 +6,13 @@ import {
 	getStudentsByTeacherController,
 	updateStudentController,
 	deleteStudentController,
+	getArchivedStudentsController,
+	restoreStudentController,
+	hardDeleteStudentController,
 } from ".";
 import { uploadUserAvatar, uploadUserAvatarUpdate } from "@/utils/image-handler";
 import { isAuthenticated } from "@/middlewares/auth";
+import { auditMiddlewares } from "@/middlewares/audit";
 
 const router = Router();
 
@@ -18,17 +22,25 @@ router.post("/student/", isAuthenticated, uploadUserAvatar, createStudentControl
 
 router.get("/student/teacher/:teacherId", isAuthenticated, getStudentsByTeacherController);
 
+// Archive endpoints (must come before /student/:id to avoid route conflicts)
+router.get("/student/archives", isAuthenticated, getArchivedStudentsController);
+router.post("/student/:id/restore", isAuthenticated, restoreStudentController);
+router.delete("/student/:id/hard-delete", isAuthenticated, hardDeleteStudentController);
+
 // Get single student by ID
 router.get("/student/:id", isAuthenticated, getStudentController);
 // Get all students with pagination and search
 router.get("/student/", isAuthenticated, getStudentsController);
 
-
-
 // Update student information
 router.put("/student/:id", isAuthenticated, uploadUserAvatarUpdate, updateStudentController);
 
 // Delete (deactivate) student
-router.delete("/student/:id", isAuthenticated, deleteStudentController);
+router.delete(
+	"/student/:id",
+	isAuthenticated,
+	auditMiddlewares.userDelete,
+	deleteStudentController
+);
 
 export default router;

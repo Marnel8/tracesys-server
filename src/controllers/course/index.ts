@@ -5,7 +5,7 @@ import {
 	ConflictError,
 	NotFoundError,
 } from "@/utils/error";
-import { createCourseData, findCourseByID, updateCourseData, deleteCourseData, getCoursesData } from "@/data/course";
+import { createCourseData, findCourseByID, updateCourseData, deleteCourseData, getCoursesData, getArchivedCoursesData, restoreCourseData, hardDeleteCourseData } from "@/data/course";
 
 // Course data interface
 interface CourseData {
@@ -126,4 +126,57 @@ export const deleteCourseController = async (req: Request, res: Response) => {
 		success: true,
 		message: "Course deleted successfully",
 	});
+};
+
+export const getArchivedCoursesController = async (req: Request, res: Response) => {
+	const { page = 1, limit = 10, search = "" } = req.query;
+
+	const result = await getArchivedCoursesData({
+		page: Number(page),
+		limit: Number(limit),
+		search: search as string,
+	});
+
+	res.status(StatusCodes.OK).json({
+		success: true,
+		data: result,
+	});
+};
+
+export const restoreCourseController = async (req: Request, res: Response) => {
+	const { id } = req.params;
+
+	if (!id) {
+		throw new BadRequestError("Course ID is required.");
+	}
+
+	const course = await restoreCourseData(id);
+
+	res.status(StatusCodes.OK).json({
+		success: true,
+		message: "Course restored successfully",
+		data: course,
+	});
+};
+
+export const hardDeleteCourseController = async (req: Request, res: Response) => {
+	try {
+		const { id } = req.params;
+
+		if (!id) {
+			throw new BadRequestError("Course ID is required.");
+		}
+
+		await hardDeleteCourseData(id);
+
+		res.status(StatusCodes.OK).json({
+			success: true,
+			message: "Course permanently deleted successfully",
+		});
+	} catch (error: any) {
+		res.status(error.statusCode || StatusCodes.INTERNAL_SERVER_ERROR).json({
+			success: false,
+			message: error.message || "Failed to permanently delete course",
+		});
+	}
 };
