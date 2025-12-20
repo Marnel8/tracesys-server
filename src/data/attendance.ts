@@ -77,7 +77,7 @@ export const getAttendanceListData = async (params: ListAttendanceParams) => {
 			{ 
 				model: User, 
 				as: "student" as any, 
-				attributes: ["id", "firstName", "lastName", "email", "studentId"],
+				attributes: ["id", "firstName", "lastName", "email", "studentId", "gender"],
 				required: true,
 				include: [
 					{
@@ -125,7 +125,7 @@ export const getAttendanceListData = async (params: ListAttendanceParams) => {
 export const findAttendanceByIdData = async (id: string) => {
 	const record = await AttendanceRecord.findByPk(id, {
 		include: [
-			{ model: User, as: "student" as any, attributes: ["id", "firstName", "lastName", "email", "studentId"] },
+			{ model: User, as: "student" as any, attributes: ["id", "firstName", "lastName", "email", "studentId", "gender"] },
 			{ 
 				model: Practicum, 
 				as: "practicum" as any,

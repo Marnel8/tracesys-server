@@ -61,7 +61,7 @@ const getAttendanceListData = async (params) => {
             {
                 model: user_1.default,
                 as: "student",
-                attributes: ["id", "firstName", "lastName", "email", "studentId"],
+                attributes: ["id", "firstName", "lastName", "email", "studentId", "gender"],
                 required: true,
                 include: [
                     {
@@ -108,7 +108,7 @@ exports.getAttendanceListData = getAttendanceListData;
 const findAttendanceByIdData = async (id) => {
     const record = await attendance_record_1.default.findByPk(id, {
         include: [
-            { model: user_1.default, as: "student", attributes: ["id", "firstName", "lastName", "email", "studentId"] },
+            { model: user_1.default, as: "student", attributes: ["id", "firstName", "lastName", "email", "studentId", "gender"] },
             {
                 model: practicum_1.default,
                 as: "practicum",
