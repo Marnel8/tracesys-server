@@ -80,9 +80,7 @@ const listAttendanceController = async (req, res) => {
         endDate: endDate || undefined,
         instructorId: req.user?.role === "instructor" ? req.user.id : undefined,
     });
-    res
-        .status(http_status_codes_1.StatusCodes.OK)
-        .json({
+    res.status(http_status_codes_1.StatusCodes.OK).json({
         success: true,
         message: "Attendance records retrieved",
         data: result,
@@ -104,9 +102,7 @@ const listInstructorAttendanceController = async (req, res) => {
         endDate: endDate || undefined,
         instructorId: req.user?.id,
     });
-    res
-        .status(http_status_codes_1.StatusCodes.OK)
-        .json({
+    res.status(http_status_codes_1.StatusCodes.OK).json({
         success: true,
         message: "Instructor attendance retrieved",
         data: result,
@@ -127,7 +123,10 @@ const clockInController = async (req, res) => {
     const studentId = req.user?.id;
     if (!studentId)
         throw new error_1.BadRequestError("Missing authenticated user context");
-    const { practicumId, date = undefined, day = undefined, latitude = null, longitude = null, address = null, locationType = undefined, deviceType = undefined, deviceUnit = null, macAddress = null, remarks = undefined, sessionType = "morning", // Default to morning for backward compatibility
+    const { practicumId, date = undefined, // SECURITY: Ignored - server uses current date
+    day = undefined, // SECURITY: Ignored - server calculates from server date
+    latitude = null, longitude = null, address = null, locationType = undefined, deviceType = undefined, deviceUnit = null, macAddress = null, remarks = undefined, // SECURITY: Ignored - server calculates based on server time
+    sessionType = "morning", // SECURITY: Ignored - server determines based on server time
      } = req.body || {};
     let photoUrl = null;
     const file = req.file;
@@ -186,19 +185,21 @@ const clockInController = async (req, res) => {
         sessionType: sessionType,
         agency,
     });
-    // Log audit event
+    // Log audit event - use actual sessionType from record (server-determined)
+    const actualSessionType = record.sessionType || sessionType;
+    const serverDate = now.toISOString().split("T")[0];
     await (0, audit_logger_1.logStudentAction)(req, {
         action: "Clock In",
         resource: "Attendance",
         resourceId: record.id,
-        details: `Student clocked in for ${sessionType} session${practicumId ? ` (Practicum: ${practicumId})` : ""}`,
+        details: `Student clocked in for ${actualSessionType} session${practicumId ? ` (Practicum: ${practicumId})` : ""}`,
         category: "attendance",
         severity: "low",
         status: "success",
         metadata: {
-            sessionType,
+            sessionType: actualSessionType,
             practicumId,
-            date: date || new Date().toISOString().split("T")[0],
+            date: serverDate, // Use server date, not client date
         },
     });
     res
@@ -210,7 +211,9 @@ const clockOutController = async (req, res) => {
     const studentId = req.user?.id;
     if (!studentId)
         throw new error_1.BadRequestError("Missing authenticated user context");
-    const { practicumId, date = undefined, latitude = null, longitude = null, address = null, locationType = undefined, deviceType = undefined, deviceUnit = null, macAddress = null, remarks = undefined, sessionType = "morning", // Default to morning for backward compatibility
+    const { practicumId, date = undefined, // SECURITY: Ignored - server uses current date
+    latitude = null, longitude = null, address = null, locationType = undefined, deviceType = undefined, deviceUnit = null, macAddress = null, remarks = undefined, // SECURITY: Ignored - server calculates based on server time
+    sessionType = "morning", // SECURITY: Ignored - server determines based on in-progress sessions
      } = req.body || {};
     let photoUrl = null;
     const file = req.file;
@@ -262,19 +265,22 @@ const clockOutController = async (req, res) => {
         sessionType: sessionType,
         agency,
     });
-    // Log audit event
+    // Log audit event - use actual sessionType from record (server-determined)
+    const actualSessionType = record.sessionType || sessionType;
+    const now = new Date();
+    const serverDate = now.toISOString().split("T")[0];
     await (0, audit_logger_1.logStudentAction)(req, {
         action: "Clock Out",
         resource: "Attendance",
         resourceId: record.id,
-        details: `Student clocked out from ${sessionType} session${practicumId ? ` (Practicum: ${practicumId})` : ""}`,
+        details: `Student clocked out from ${actualSessionType} session${practicumId ? ` (Practicum: ${practicumId})` : ""}`,
         category: "attendance",
         severity: "low",
         status: "success",
         metadata: {
-            sessionType,
+            sessionType: actualSessionType,
             practicumId,
-            date: date || new Date().toISOString().split("T")[0],
+            date: serverDate, // Use server date, not client date
         },
     });
     res
@@ -294,9 +300,7 @@ const getStudentAttendanceController = async (req, res) => {
         studentId,
         date: startDate || undefined,
     });
-    res
-        .status(http_status_codes_1.StatusCodes.OK)
-        .json({
+    res.status(http_status_codes_1.StatusCodes.OK).json({
         success: true,
         message: "Student attendance records retrieved",
         data: result,
@@ -330,7 +334,8 @@ const getAttendanceStatsController = async (req, res) => {
     // Note: "late" is included for backward compatibility
     let currentStreak = 0;
     for (let i = records.length - 1; i >= 0; i--) {
-        if (["present", "excused"].includes(records[i].status) || records[i].status === "late") {
+        if (["present", "excused"].includes(records[i].status) ||
+            records[i].status === "late") {
             currentStreak++;
         }
         else {
@@ -341,7 +346,8 @@ const getAttendanceStatsController = async (req, res) => {
     let longestStreak = 0;
     let tempStreak = 0;
     for (const record of records) {
-        if (["present", "excused"].includes(record.status) || record.status === "late") {
+        if (["present", "excused"].includes(record.status) ||
+            record.status === "late") {
             tempStreak++;
             longestStreak = Math.max(longestStreak, tempStreak);
         }
@@ -359,9 +365,7 @@ const getAttendanceStatsController = async (req, res) => {
         currentStreak,
         longestStreak,
     };
-    res
-        .status(http_status_codes_1.StatusCodes.OK)
-        .json({
+    res.status(http_status_codes_1.StatusCodes.OK).json({
         success: true,
         message: "Attendance stats retrieved",
         data: stats,
@@ -380,9 +384,7 @@ const getTodayAttendanceController = async (req, res) => {
         date: today,
     });
     const todayRecord = result.attendance?.[0] || null;
-    res
-        .status(http_status_codes_1.StatusCodes.OK)
-        .json({
+    res.status(http_status_codes_1.StatusCodes.OK).json({
         success: true,
         message: "Today's attendance retrieved",
         data: todayRecord,
