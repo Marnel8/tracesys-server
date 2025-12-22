@@ -185,6 +185,9 @@ export const activateUserController = async (req: Request, res: Response) => {
     studentId,
     instructorId,
     departmentId,
+    program,
+    specialization,
+    yearLevel,
   } = newUser.user as any;
 
   const user = await createUserData({
@@ -203,6 +206,9 @@ export const activateUserController = async (req: Request, res: Response) => {
     studentId,
     instructorId,
     departmentId,
+    program,
+    specialization,
+    yearLevel,
   });
 
   res.status(StatusCodes.CREATED).json(user);

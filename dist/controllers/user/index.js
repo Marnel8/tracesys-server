@@ -143,7 +143,7 @@ const activateUserController = async (req, res) => {
     if (newUser.activationCode !== activation_code) {
         throw new error_1.BadRequestError("Activation code did not match.");
     }
-    const { firstName, lastName, middleName, phone, email, age, password, gender, avatar, role, address, bio, studentId, instructorId, departmentId, } = newUser.user;
+    const { firstName, lastName, middleName, phone, email, age, password, gender, avatar, role, address, bio, studentId, instructorId, departmentId, program, specialization, yearLevel, } = newUser.user;
     const user = await (0, user_3.createUserData)({
         firstName,
         lastName,
@@ -160,6 +160,9 @@ const activateUserController = async (req, res) => {
         studentId,
         instructorId,
         departmentId,
+        program,
+        specialization,
+        yearLevel,
     });
     res.status(http_status_codes_1.StatusCodes.CREATED).json(user);
 };

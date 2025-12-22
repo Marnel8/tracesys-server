@@ -10,6 +10,7 @@ const user_1 = __importDefault(require("../db/models/user.js"));
 const student_enrollment_1 = __importDefault(require("../db/models/student-enrollment.js"));
 const requirement_1 = __importDefault(require("../db/models/requirement.js"));
 const report_1 = __importDefault(require("../db/models/report.js"));
+const report_view_1 = __importDefault(require("../db/models/report-view.js"));
 const attendance_record_1 = __importDefault(require("../db/models/attendance-record.js"));
 const practicum_1 = __importDefault(require("../db/models/practicum.js"));
 const announcement_1 = __importDefault(require("../db/models/announcement.js"));
@@ -277,6 +278,18 @@ const deleteInvitation = async (invitationId, instructorId) => {
                         where: { studentId: user.id },
                         transaction: t,
                     });
+                    // Delete reports (clear report views first to satisfy FK constraint)
+                    const reportIds = await report_1.default.findAll({
+                        where: { studentId: user.id },
+                        attributes: ["id"],
+                        transaction: t,
+                    });
+                    if (reportIds.length > 0) {
+                        await report_view_1.default.destroy({
+                            where: { reportId: { [sequelize_1.Op.in]: reportIds.map((r) => r.id) } },
+                            transaction: t,
+                        });
+                    }
                     // Delete reports
                     await report_1.default.destroy({
                         where: { studentId: user.id },

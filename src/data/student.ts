@@ -13,6 +13,7 @@ import AttendanceRecord from "@/db/models/attendance-record";
 import Invitation from "@/db/models/invitation";
 import AuditLog from "@/db/models/audit-log";
 import Report from "@/db/models/report";
+import ReportView from "@/db/models/report-view";
 import { ConflictError, NotFoundError } from "@/utils/error";
 import { Op } from "sequelize";
 import StudentEnrollment from "@/db/models/student-enrollment";
@@ -1372,6 +1373,20 @@ export const hardDeleteStudentData = async (id: string) => {
       where: { studentId: id },
       transaction: t,
     });
+
+    // Delete reports (clear report views first to satisfy FK constraint)
+    const reportIds = await Report.findAll({
+      where: { studentId: id },
+      attributes: ["id"],
+      transaction: t,
+    });
+
+    if (reportIds.length > 0) {
+      await ReportView.destroy({
+        where: { reportId: { [Op.in]: reportIds.map((r) => r.id) } },
+        transaction: t,
+      });
+    }
 
     // Delete reports
     await Report.destroy({

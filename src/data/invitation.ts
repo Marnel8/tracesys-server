@@ -4,6 +4,7 @@ import User from "@/db/models/user";
 import StudentEnrollment from "@/db/models/student-enrollment";
 import Requirement from "@/db/models/requirement";
 import Report from "@/db/models/report";
+import ReportView from "@/db/models/report-view";
 import AttendanceRecord from "@/db/models/attendance-record";
 import Practicum from "@/db/models/practicum";
 import Announcement from "@/db/models/announcement";
@@ -343,6 +344,20 @@ export const deleteInvitation = async (invitationId: string, instructorId: strin
 						where: { studentId: user.id },
 						transaction: t,
 					});
+
+					// Delete reports (clear report views first to satisfy FK constraint)
+					const reportIds = await Report.findAll({
+						where: { studentId: user.id },
+						attributes: ["id"],
+						transaction: t,
+					});
+
+					if (reportIds.length > 0) {
+						await ReportView.destroy({
+							where: { reportId: { [Op.in]: reportIds.map((r) => r.id) } },
+							transaction: t,
+						});
+					}
 
 					// Delete reports
 					await Report.destroy({

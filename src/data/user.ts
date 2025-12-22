@@ -112,6 +112,9 @@ export const createUserData = async (userData: CreateUserParams) => {
         studentId: userData?.studentId,
         instructorId: userData?.instructorId,
         departmentId: userData?.departmentId,
+        program: userData?.program,
+        specialization: userData?.specialization,
+        yearLevel: userData?.yearLevel,
         role: finalRole, // Explicitly set role, don't rely on database defaults
       },
       { transaction: t }

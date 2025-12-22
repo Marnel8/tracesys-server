@@ -36,6 +36,13 @@ const createSectionController = async (req, res) => {
 exports.createSectionController = createSectionController;
 const getSectionsController = async (req, res) => {
     const { page = 1, limit = 10, search = "", status = "all", courseId, year, semester } = req.query;
+    // Enforce instructor scoping to avoid cross-department leakage.
+    const authUser = req.user;
+    const instructorId = authUser?.id;
+    const role = authUser?.role;
+    if (!instructorId || role !== "instructor") {
+        throw new error_1.BadRequestError("Only authenticated instructors can view their sections.");
+    }
     const result = await (0, section_1.getSectionsData)({
         page: Number(page),
         limit: Number(limit),
@@ -44,6 +51,7 @@ const getSectionsController = async (req, res) => {
         courseId: courseId,
         year: year,
         semester: semester,
+        instructorId,
     });
     res.status(http_status_codes_1.StatusCodes.OK).json({
         success: true,
@@ -60,6 +68,16 @@ const getSectionController = async (req, res) => {
     const section = await (0, section_1.findSectionByID)(id);
     if (!section) {
         throw new error_1.NotFoundError("Section not found");
+    }
+    // Guard against cross-instructor access.
+    const authUser = req.user;
+    const instructorId = authUser?.id;
+    const role = authUser?.role;
+    if (!instructorId || role !== "instructor") {
+        throw new error_1.BadRequestError("Only authenticated instructors can view their sections.");
+    }
+    if (section.instructorId !== instructorId) {
+        throw new error_1.BadRequestError("You are not allowed to view this section.");
     }
     res.status(http_status_codes_1.StatusCodes.OK).json({
         success: true,

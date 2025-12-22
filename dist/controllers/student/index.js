@@ -69,13 +69,22 @@ const getStudentsController = async (req, res) => {
 };
 exports.getStudentsController = getStudentsController;
 const getStudentsByTeacherController = async (req, res) => {
-    const { teacherId } = req.params;
+    const { teacherId: teacherIdParam } = req.params;
     const { page = 1, limit = 10, search = "" } = req.query;
-    if (!teacherId) {
-        throw new error_1.BadRequestError("Teacher ID is required.");
+    // Always trust the authenticated user to avoid cross‑access between instructors.
+    const authUser = req.user;
+    const authTeacherId = authUser?.id;
+    const authRole = authUser?.role;
+    // Require an authenticated instructor
+    if (!authTeacherId || authRole !== "instructor") {
+        throw new error_1.BadRequestError("Only authenticated instructors can view their students.");
+    }
+    // Prevent browsing another instructor's roster by passing a different teacherId in the URL
+    if (teacherIdParam && teacherIdParam !== authTeacherId) {
+        throw new error_1.BadRequestError("You are not allowed to view another instructor's students.");
     }
     const result = await (0, student_1.getStudentsByTeacherData)({
-        teacherId,
+        teacherId: authTeacherId,
         page: Number(page),
         limit: Number(limit),
         search: search,

@@ -33,6 +33,7 @@ interface GetSectionsParams {
 	courseId?: string;
 	year?: string;
 	semester?: string;
+	instructorId: string;
 }
 
 export const createSectionData = async (data: CreateSectionParams) => {
@@ -66,11 +67,13 @@ export const createSectionData = async (data: CreateSectionParams) => {
 
 export const getSectionsData = async (params: GetSectionsParams) => {
 	try {
-		const { page, limit, search, status, courseId, year, semester } = params;
+		const { page, limit, search, status, courseId, year, semester, instructorId } = params;
 		const offset = (page - 1) * limit;
 
 		// Build where clause
-		const whereClause: any = {};
+		const whereClause: any = {
+			instructorId, // Scope to the authenticated instructor
+		};
 
 		if (search) {
 			whereClause[Op.or] = [

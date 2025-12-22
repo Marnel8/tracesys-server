@@ -41,10 +41,12 @@ const createSectionData = async (data) => {
 exports.createSectionData = createSectionData;
 const getSectionsData = async (params) => {
     try {
-        const { page, limit, search, status, courseId, year, semester } = params;
+        const { page, limit, search, status, courseId, year, semester, instructorId } = params;
         const offset = (page - 1) * limit;
         // Build where clause
-        const whereClause = {};
+        const whereClause = {
+            instructorId, // Scope to the authenticated instructor
+        };
         if (search) {
             whereClause[sequelize_1.Op.or] = [
                 { name: { [sequelize_1.Op.like]: `%${search}%` } },

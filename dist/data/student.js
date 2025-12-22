@@ -52,6 +52,7 @@ const attendance_record_1 = __importDefault(require("../db/models/attendance-rec
 const invitation_1 = __importDefault(require("../db/models/invitation.js"));
 const audit_log_1 = __importDefault(require("../db/models/audit-log.js"));
 const report_1 = __importDefault(require("../db/models/report.js"));
+const report_view_1 = __importDefault(require("../db/models/report-view.js"));
 const error_1 = require("../utils/error.js");
 const sequelize_1 = require("sequelize");
 const student_enrollment_1 = __importDefault(require("../db/models/student-enrollment.js"));
@@ -1167,6 +1168,18 @@ const hardDeleteStudentData = async (id) => {
             where: { studentId: id },
             transaction: t,
         });
+        // Delete reports (clear report views first to satisfy FK constraint)
+        const reportIds = await report_1.default.findAll({
+            where: { studentId: id },
+            attributes: ["id"],
+            transaction: t,
+        });
+        if (reportIds.length > 0) {
+            await report_view_1.default.destroy({
+                where: { reportId: { [sequelize_1.Op.in]: reportIds.map((r) => r.id) } },
+                transaction: t,
+            });
+        }
         // Delete reports
         await report_1.default.destroy({
             where: { studentId: id },
