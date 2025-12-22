@@ -14,6 +14,7 @@ import Department from "./department";
 import Supervisor from "./supervisor";
 import Practicum from "./practicum";
 import AgencyRequirement from "./agency-requirement";
+import User from "./user";
 
 @Table({
 	tableName: "agencies",
@@ -82,6 +83,11 @@ export default class Agency extends Model {
 	@Column({ type: DataType.UUID, allowNull: true })
 	declare departmentId: string;
 
+	@ForeignKey(() => User)
+	@Index({ name: "idx_agencies_instructorId" })
+	@Column({ type: DataType.UUID, allowNull: true })
+	declare instructorId: string;
+
 	@Column({ type: DataType.TEXT, allowNull: true })
 	declare description: string;
 
@@ -114,6 +120,9 @@ export default class Agency extends Model {
 
 	@BelongsTo(() => Department, { foreignKey: "departmentId", onDelete: "SET NULL", onUpdate: "CASCADE" })
 	declare department: Department;
+
+	@BelongsTo(() => User, { foreignKey: "instructorId", onDelete: "SET NULL", onUpdate: "CASCADE" })
+	declare instructor: User;
 
 	@HasMany(() => Supervisor, "agencyId")
 	declare supervisors: Supervisor[];

@@ -17,6 +17,7 @@ const department_1 = __importDefault(require("./department.js"));
 const supervisor_1 = __importDefault(require("./supervisor.js"));
 const practicum_1 = __importDefault(require("./practicum.js"));
 const agency_requirement_1 = __importDefault(require("./agency-requirement.js"));
+const user_1 = __importDefault(require("./user.js"));
 let Agency = class Agency extends sequelize_typescript_1.Model {
 };
 __decorate([
@@ -98,6 +99,12 @@ __decorate([
     __metadata("design:type", String)
 ], Agency.prototype, "departmentId", void 0);
 __decorate([
+    (0, sequelize_typescript_1.ForeignKey)(() => user_1.default),
+    (0, sequelize_typescript_1.Index)({ name: "idx_agencies_instructorId" }),
+    (0, sequelize_typescript_1.Column)({ type: sequelize_typescript_1.DataType.UUID, allowNull: true }),
+    __metadata("design:type", String)
+], Agency.prototype, "instructorId", void 0);
+__decorate([
     (0, sequelize_typescript_1.Column)({ type: sequelize_typescript_1.DataType.TEXT, allowNull: true }),
     __metadata("design:type", String)
 ], Agency.prototype, "description", void 0);
@@ -141,6 +148,10 @@ __decorate([
     (0, sequelize_typescript_1.BelongsTo)(() => department_1.default, { foreignKey: "departmentId", onDelete: "SET NULL", onUpdate: "CASCADE" }),
     __metadata("design:type", department_1.default)
 ], Agency.prototype, "department", void 0);
+__decorate([
+    (0, sequelize_typescript_1.BelongsTo)(() => user_1.default, { foreignKey: "instructorId", onDelete: "SET NULL", onUpdate: "CASCADE" }),
+    __metadata("design:type", user_1.default)
+], Agency.prototype, "instructor", void 0);
 __decorate([
     (0, sequelize_typescript_1.HasMany)(() => supervisor_1.default, "agencyId"),
     __metadata("design:type", Array)

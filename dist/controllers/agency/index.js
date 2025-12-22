@@ -10,6 +10,8 @@ const createAgencyController = async (req, res) => {
     if (!name || !address || !contactPerson || !contactRole || !contactPhone || !contactEmail || !branchType) {
         throw new error_1.BadRequestError("Please provide all necessary agency data.");
     }
+    // Get the instructor ID from the authenticated user
+    const instructorId = req.user?.id;
     const agencyData = {
         name,
         address,
@@ -27,6 +29,7 @@ const createAgencyController = async (req, res) => {
         latitude,
         longitude,
         isSchoolAffiliated,
+        instructorId, // Set the instructor who created this agency
     };
     const result = await (0, agency_1.createAgencyData)(agencyData);
     // createAgencyData returns an object { agency }, normalize to entity

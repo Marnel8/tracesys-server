@@ -78,6 +78,9 @@ export const createAgencyController = async (req: Request, res: Response) => {
 		throw new BadRequestError("Please provide all necessary agency data.");
 	}
 
+	// Get the instructor ID from the authenticated user
+	const instructorId = (req.user as any)?.id;
+
 	const agencyData = {
 		name,
 		address,
@@ -95,6 +98,7 @@ export const createAgencyController = async (req: Request, res: Response) => {
 		latitude,
 		longitude,
 		isSchoolAffiliated,
+		instructorId, // Set the instructor who created this agency
 	};
 
 	const result = await createAgencyData(agencyData);

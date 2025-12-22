@@ -24,6 +24,7 @@ interface CreateAgencyParams {
 	latitude?: number;
 	longitude?: number;
 	isSchoolAffiliated?: boolean;
+	instructorId?: string;
 }
 
 interface GetAgenciesParams {
