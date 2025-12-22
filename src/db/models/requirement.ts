@@ -35,6 +35,11 @@ export default class Requirement extends Model {
 	@Column({ type: DataType.UUID, allowNull: true })
 	declare templateId: string;
 
+	// Owning instructor for this requirement (who assigned/owns it)
+	@ForeignKey(() => User)
+	@Column({ type: DataType.UUID, allowNull: true })
+	declare instructorId: string;
+
 	@ForeignKey(() => Practicum)
 	@Column({ type: DataType.UUID, allowNull: true })
 	declare practicumId: string;
@@ -90,6 +95,9 @@ export default class Requirement extends Model {
 	@Column({ type: DataType.INTEGER, allowNull: true })
 	declare fileSize: number;
 
+	@Column({ type: DataType.BOOLEAN, defaultValue: true })
+	declare isActive: boolean;
+
 	@CreatedAt
 	declare createdAt: Date;
 
@@ -104,6 +112,9 @@ export default class Requirement extends Model {
 
 	@BelongsTo(() => Practicum, "practicumId")
 	declare practicum: Practicum;
+
+	@BelongsTo(() => User, "instructorId")
+	declare instructor: User;
 
 	@BelongsTo(() => User, "approvedBy")
 	declare approver: User;

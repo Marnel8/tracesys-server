@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.hardDeleteRequirementController = exports.restoreRequirementController = exports.getArchivedRequirementsController = exports.updateRequirementDueDateController = exports.getStudentRequirementCommentsController = exports.getRequirementCommentsController = exports.createRequirementCommentController = exports.getRequirementStatsController = exports.rejectRequirementController = exports.approveRequirementController = exports.submitRequirementController = exports.getRequirementController = exports.getInstructorRequirementsController = exports.getRequirementsController = exports.createRequirementFromTemplateController = void 0;
+exports.hardDeleteRequirementController = exports.archiveRequirementController = exports.restoreRequirementController = exports.getArchivedRequirementsController = exports.updateRequirementDueDateController = exports.getStudentRequirementCommentsController = exports.getRequirementCommentsController = exports.createRequirementCommentController = exports.getRequirementStatsController = exports.rejectRequirementController = exports.approveRequirementController = exports.submitRequirementController = exports.getRequirementController = exports.getInstructorRequirementsController = exports.getRequirementsController = exports.createRequirementFromTemplateController = void 0;
 const path_1 = __importDefault(require("path"));
 const http_status_codes_1 = require("http-status-codes");
 const error_1 = require("../../utils/error.js");
@@ -23,6 +23,7 @@ const createRequirementFromTemplateController = async (req, res) => {
         templateId,
         studentId,
         practicumId,
+        instructorId: req.user?.role === "instructor" ? req.user.id : null,
         dueDate: dueDateValue,
     });
     res.status(http_status_codes_1.StatusCodes.CREATED).json({
@@ -34,6 +35,16 @@ const createRequirementFromTemplateController = async (req, res) => {
 exports.createRequirementFromTemplateController = createRequirementFromTemplateController;
 const getRequirementsController = async (req, res) => {
     const { page = 1, limit = 10, search = "", status = "all", studentId, practicumId, includePending } = req.query;
+    const authUser = req.user;
+    let instructorId;
+    if (authUser?.role === "instructor") {
+        // Instructors are always scoped to their own requirements
+        instructorId = authUser.id;
+    }
+    else if (authUser?.role === "student" && req.query.instructorId) {
+        // Students can optionally scope to a specific instructor's requirements
+        instructorId = String(req.query.instructorId);
+    }
     const result = await (0, requirement_2.getRequirementsData)({
         page: Number(page),
         limit: Number(limit),
@@ -41,7 +52,7 @@ const getRequirementsController = async (req, res) => {
         status: status || "all",
         studentId: studentId || undefined,
         practicumId: practicumId || undefined,
-        instructorId: req.user?.role === "instructor" ? req.user.id : undefined,
+        instructorId,
         includePending: includePending === "true" || includePending === true,
     });
     res.status(http_status_codes_1.StatusCodes.OK).json({ success: true, message: "Requirements retrieved", data: result });
@@ -317,6 +328,26 @@ const restoreRequirementController = async (req, res) => {
     });
 };
 exports.restoreRequirementController = restoreRequirementController;
+const archiveRequirementController = async (req, res) => {
+    try {
+        const { id } = req.params;
+        if (!id) {
+            throw new error_1.BadRequestError("Requirement ID is required.");
+        }
+        await (0, requirement_2.archiveRequirementData)(id);
+        res.status(http_status_codes_1.StatusCodes.OK).json({
+            success: true,
+            message: "Requirement archived successfully",
+        });
+    }
+    catch (error) {
+        res.status(error.statusCode || http_status_codes_1.StatusCodes.INTERNAL_SERVER_ERROR).json({
+            success: false,
+            message: error.message || "Failed to archive requirement",
+        });
+    }
+};
+exports.archiveRequirementController = archiveRequirementController;
 const hardDeleteRequirementController = async (req, res) => {
     try {
         const { id } = req.params;

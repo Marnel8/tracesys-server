@@ -9,6 +9,10 @@ import {
 	findRequirementTemplateByID,
 	updateRequirementTemplateData,
 	deleteRequirementTemplateData,
+	getArchivedRequirementTemplatesData,
+	archiveRequirementTemplateData,
+	restoreRequirementTemplateData,
+	hardDeleteRequirementTemplateData,
 } from "@/data/requirement-template";
 
 export const createRequirementTemplateController = async (
@@ -81,13 +85,25 @@ export const getRequirementTemplatesController = async (
 	req: Request,
 	res: Response
 ) => {
-	const { page = 1, limit = 10, search = "", status = "all" } = req.query;
+	const { page = 1, limit = 10, search = "", status = "all", createdBy: createdByQuery } = req.query as any;
+
+	const authUser = req.user as any;
+	let createdBy: string | undefined;
+
+	// Instructors always see only their own templates
+	if (authUser?.role === "instructor") {
+		createdBy = authUser.id;
+	} else if (createdByQuery) {
+		// Allow admins/students to filter by instructor-created templates
+		createdBy = String(createdByQuery);
+	}
 
 	const result = await getRequirementTemplatesData({
 		page: Number(page),
 		limit: Number(limit),
 		search: search as string,
 		status: status as string,
+		createdBy,
 	});
 
 	res.status(StatusCodes.OK).json({
@@ -175,6 +191,82 @@ export const deleteRequirementTemplateController = async (
 	res.status(StatusCodes.OK).json({
 		success: true,
 		message: "Requirement template deleted successfully",
+	});
+};
+
+export const getArchivedRequirementTemplatesController = async (
+	req: Request,
+	res: Response
+) => {
+	const { page = 1, limit = 10, search = "" } = req.query as any;
+
+	const authUser = req.user as any;
+	let createdBy: string | undefined;
+
+	if (authUser?.role === "instructor") {
+		createdBy = authUser.id;
+	}
+
+	const result = await getArchivedRequirementTemplatesData({
+		page: Number(page),
+		limit: Number(limit),
+		search: search as string,
+		createdBy,
+	});
+
+	res.status(StatusCodes.OK).json({
+		success: true,
+		data: result,
+	});
+};
+
+export const archiveRequirementTemplateController = async (
+	req: Request,
+	res: Response
+) => {
+	const { id } = req.params;
+	if (!id) {
+		throw new BadRequestError("Template ID is required");
+	}
+
+	const template = await archiveRequirementTemplateData(id);
+	res.status(StatusCodes.OK).json({
+		success: true,
+		message: "Requirement template archived successfully",
+		data: template,
+	});
+};
+
+export const restoreRequirementTemplateController = async (
+	req: Request,
+	res: Response
+) => {
+	const { id } = req.params;
+	if (!id) {
+		throw new BadRequestError("Template ID is required");
+	}
+
+	const template = await restoreRequirementTemplateData(id);
+	res.status(StatusCodes.OK).json({
+		success: true,
+		message: "Requirement template restored successfully",
+		data: template,
+	});
+};
+
+export const hardDeleteRequirementTemplateController = async (
+	req: Request,
+	res: Response
+) => {
+	const { id } = req.params;
+	if (!id) {
+		throw new BadRequestError("Template ID is required");
+	}
+
+	await hardDeleteRequirementTemplateData(id);
+	res.status(StatusCodes.OK).json({
+		success: true,
+		message: "Requirement template permanently deleted successfully",
 	});
 };
 

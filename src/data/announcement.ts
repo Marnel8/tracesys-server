@@ -419,14 +419,18 @@ export const getArchivedAnnouncementsData = async (params: {
 	page: number;
 	limit: number;
 	search: string;
+	authorId?: string;
 }) => {
 	try {
-		const { page, limit, search } = params;
+		const { page, limit, search, authorId } = params;
 		const offset = (page - 1) * limit;
 
 		const whereClause: any = {
 			status: "Archived", // Only include archived announcements
 		};
+		if (authorId) {
+			whereClause.authorId = authorId;
+		}
 
 		if (search) {
 			whereClause[Op.or] = [

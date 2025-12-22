@@ -320,7 +320,7 @@ const createStudentData = async (studentData) => {
             }, { transaction: t });
         }
         // Create default requirements for the student
-        await createDefaultRequirements(user.id, t, practicum?.agencyId);
+        await createDefaultRequirements(user.id, t, practicum?.agencyId, sectionRecord?.instructorId || null);
         await t.commit();
         // Fetch practicum with related data if it exists
         let practicumData = null;
@@ -443,7 +443,7 @@ const createStudentFromOAuth = async (params) => {
 };
 exports.createStudentFromOAuth = createStudentFromOAuth;
 // Helper function to create default requirements
-const createDefaultRequirements = async (studentId, transaction, agencyId) => {
+const createDefaultRequirements = async (studentId, transaction, agencyId, instructorId) => {
     // Get agency affiliation status if agencyId is provided
     let isSchoolAffiliated = false;
     if (agencyId) {
@@ -527,7 +527,9 @@ const createDefaultRequirements = async (studentId, transaction, agencyId) => {
                 ...reqData,
                 createdBy: systemUser.id,
                 isActive: true,
-                appliesToSchoolAffiliated: reqData.appliesToSchoolAffiliated !== undefined ? reqData.appliesToSchoolAffiliated : true,
+                appliesToSchoolAffiliated: reqData.appliesToSchoolAffiliated !== undefined
+                    ? reqData.appliesToSchoolAffiliated
+                    : true,
             }, { transaction });
         }
         // Check if template should be applied based on agency affiliation
@@ -539,6 +541,7 @@ const createDefaultRequirements = async (studentId, transaction, agencyId) => {
         await requirement_1.default.create({
             studentId,
             templateId: template.id,
+            instructorId: instructorId ?? null,
             title: reqData.title,
             description: reqData.description,
             category: reqData.category,
@@ -1025,7 +1028,7 @@ const getStudentsByTeacherData = async (params) => {
 };
 exports.getStudentsByTeacherData = getStudentsByTeacherData;
 const getArchivedStudentsData = async (params) => {
-    const { page, limit, search } = params;
+    const { page, limit, search, instructorId } = params;
     const offset = (page - 1) * limit;
     const whereClause = {
         role: user_1.UserRole.STUDENT,
@@ -1038,6 +1041,63 @@ const getArchivedStudentsData = async (params) => {
             { email: { [sequelize_1.Op.like]: `%${search}%` } },
             { studentId: { [sequelize_1.Op.like]: `%${search}%` } },
         ];
+    }
+    // If instructorId is provided, restrict to students in that instructor's sections or invited sections
+    let allowedSectionIds = [];
+    if (instructorId) {
+        const [instructorSections, invitedSections] = await Promise.all([
+            section_1.default.findAll({
+                attributes: ["id"],
+                where: { instructorId },
+            }),
+            invitation_1.default.findAll({
+                attributes: ["sectionId"],
+                where: {
+                    createdBy: instructorId,
+                    role: "student",
+                    sectionId: { [sequelize_1.Op.ne]: null },
+                },
+            }),
+        ]);
+        allowedSectionIds = Array.from(new Set([
+            ...instructorSections.map((s) => s.id),
+            ...invitedSections
+                .map((i) => i.sectionId)
+                .filter((id) => !!id),
+        ]));
+        // If no allowed sections, return empty result early
+        if (allowedSectionIds.length === 0) {
+            return {
+                items: [],
+                pagination: {
+                    currentPage: page,
+                    totalPages: 0,
+                    totalItems: 0,
+                    itemsPerPage: limit,
+                },
+            };
+        }
+        // Resolve students enrolled in those sections
+        const enrollments = await student_enrollment_1.default.findAll({
+            attributes: ["studentId"],
+            where: { sectionId: { [sequelize_1.Op.in]: allowedSectionIds } },
+            raw: true,
+        });
+        const allowedStudentIds = Array.from(new Set(enrollments
+            .map((e) => e.studentId)
+            .filter((id) => !!id)));
+        if (allowedStudentIds.length === 0) {
+            return {
+                items: [],
+                pagination: {
+                    currentPage: page,
+                    totalPages: 0,
+                    totalItems: 0,
+                    itemsPerPage: limit,
+                },
+            };
+        }
+        whereClause.id = { [sequelize_1.Op.in]: allowedStudentIds };
     }
     const { count, rows: students } = await user_1.default.findAndCountAll({
         where: whereClause,

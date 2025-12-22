@@ -122,10 +122,13 @@ const deleteSectionController = async (req, res) => {
 exports.deleteSectionController = deleteSectionController;
 const getArchivedSectionsController = async (req, res) => {
     const { page = 1, limit = 10, search = "" } = req.query;
+    const authUser = req.user;
+    const instructorId = authUser?.role === "instructor" ? authUser.id : undefined;
     const result = await (0, section_1.getArchivedSectionsData)({
         page: Number(page),
         limit: Number(limit),
         search: search,
+        instructorId,
     });
     res.status(http_status_codes_1.StatusCodes.OK).json({
         success: true,

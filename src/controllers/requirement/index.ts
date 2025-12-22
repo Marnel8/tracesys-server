@@ -21,6 +21,7 @@ import {
 	getArchivedRequirementsData,
 	restoreRequirementData,
 	hardDeleteRequirementData,
+	archiveRequirementData,
 } from "@/data/requirement";
 import { logStudentAction } from "@/utils/audit-logger";
 
@@ -38,6 +39,7 @@ export const createRequirementFromTemplateController = async (
 		templateId,
 		studentId,
 		practicumId,
+		instructorId: req.user?.role === "instructor" ? req.user.id : null,
 		dueDate: dueDateValue,
 	});
 	res.status(StatusCodes.CREATED).json({
@@ -50,6 +52,15 @@ export const createRequirementFromTemplateController = async (
 export const getRequirementsController = async (req: Request, res: Response) => {
 	const { page = 1, limit = 10, search = "", status = "all", studentId, practicumId, includePending } =
 		req.query as any;
+	const authUser = req.user as any;
+	let instructorId: string | undefined;
+	if (authUser?.role === "instructor") {
+		// Instructors are always scoped to their own requirements
+		instructorId = authUser.id;
+	} else if (authUser?.role === "student" && req.query.instructorId) {
+		// Students can optionally scope to a specific instructor's requirements
+		instructorId = String(req.query.instructorId);
+	}
 	const result = await getRequirementsData({
 		page: Number(page),
 		limit: Number(limit),
@@ -57,7 +68,7 @@ export const getRequirementsController = async (req: Request, res: Response) => 
 		status: status || "all",
 		studentId: studentId || undefined,
 		practicumId: practicumId || undefined,
-		instructorId: req.user?.role === "instructor" ? req.user.id : undefined,
+		instructorId,
 		includePending: includePending === "true" || includePending === true,
 	} as any);
 	res.status(StatusCodes.OK).json({ success: true, message: "Requirements retrieved", data: result });
@@ -343,6 +354,28 @@ export const restoreRequirementController = async (req: Request, res: Response) 
 		message: "Requirement restored successfully",
 		data: requirement,
 	});
+};
+
+export const archiveRequirementController = async (req: Request, res: Response) => {
+	try {
+		const { id } = req.params;
+
+		if (!id) {
+			throw new BadRequestError("Requirement ID is required.");
+		}
+
+		await archiveRequirementData(id);
+
+		res.status(StatusCodes.OK).json({
+			success: true,
+			message: "Requirement archived successfully",
+		});
+	} catch (error: any) {
+		res.status(error.statusCode || StatusCodes.INTERNAL_SERVER_ERROR).json({
+			success: false,
+			message: error.message || "Failed to archive requirement",
+		});
+	}
 };
 
 export const hardDeleteRequirementController = async (req: Request, res: Response) => {

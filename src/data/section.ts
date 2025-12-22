@@ -220,14 +220,18 @@ export const getArchivedSectionsData = async (params: {
 	page: number;
 	limit: number;
 	search: string;
+	instructorId?: string;
 }) => {
 	try {
-		const { page, limit, search } = params;
+		const { page, limit, search, instructorId } = params;
 		const offset = (page - 1) * limit;
 
 		const whereClause: any = {
 			isActive: false, // Only include archived (inactive) sections
 		};
+		if (instructorId) {
+			whereClause.instructorId = instructorId;
+		}
 
 		if (search) {
 			whereClause[Op.or] = [

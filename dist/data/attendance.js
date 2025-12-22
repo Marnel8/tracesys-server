@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.clockOutData = exports.clockInData = exports.nullifyIncompleteSessions = exports.calculateHoursWithLunchExclusion = exports.calculateLunchDuration = exports.calculateRemarks = exports.determineSessionType = exports.checkOperatingHours = exports.checkOperatingDay = exports.findAttendanceByIdData = exports.getAttendanceListData = void 0;
+exports.clockOutData = exports.clockInData = exports.nullifyIncompleteSessions = exports.checkAndNullifyMissedClockOuts = exports.calculateHoursWithLunchExclusion = exports.calculateLunchDuration = exports.calculateRemarks = exports.determineSessionType = exports.checkOperatingHours = exports.checkOperatingDay = exports.findAttendanceByIdData = exports.getAttendanceListData = void 0;
 const sequelize_1 = require("sequelize");
 const attendance_record_1 = __importDefault(require("../db/models/attendance-record.js"));
 const detailed_attendance_log_1 = __importDefault(require("../db/models/detailed-attendance-log.js"));
@@ -228,25 +228,100 @@ const checkOperatingHours = (agency, currentTime, sessionType) => {
 exports.checkOperatingHours = checkOperatingHours;
 /**
  * Helper function to parse time string to minutes since midnight
+ * Handles formats: "HH:MM", "HH:MM:SS", "H:MM"
+ * Normalizes and validates time format
  */
 const parseTimeToMinutes = (timeStr) => {
     if (!timeStr)
         return null;
-    const parts = timeStr.split(":");
+    // Normalize: trim whitespace and split by colon
+    const normalized = String(timeStr).trim();
+    const parts = normalized.split(":");
     if (parts.length < 2)
         return null;
-    return parseInt(parts[0]) * 60 + parseInt(parts[1]);
+    const hours = parseInt(parts[0], 10);
+    const minutes = parseInt(parts[1], 10);
+    // Validate: hours 0-23, minutes 0-59
+    if (isNaN(hours) || isNaN(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+        return null;
+    }
+    return hours * 60 + minutes;
+};
+/**
+ * Helper function to calculate time boundaries based on agency operating hours
+ * Returns dynamic boundaries instead of hardcoded times
+ */
+const calculateTimeBoundaries = (agency) => {
+    const opening = parseTimeToMinutes(agency?.openingTime);
+    const closing = parseTimeToMinutes(agency?.closingTime);
+    const lunchStart = parseTimeToMinutes(agency?.lunchStartTime);
+    const lunchEnd = parseTimeToMinutes(agency?.lunchEndTime);
+    // Morning clock-in cutoff: Use lunch start time if available, otherwise calculate from opening time
+    // If lunch starts at 12:00 PM, morning clock-in closes at 11:59 AM (1 minute before lunch)
+    // If no lunch time, use 2 hours after opening (e.g., 8:00 AM -> 10:00 AM cutoff)
+    let morningCutoff;
+    if (lunchStart !== null) {
+        // Morning closes 1 minute before lunch starts (inclusive: <= lunchStart - 1)
+        morningCutoff = lunchStart - 1;
+    }
+    else if (opening !== null) {
+        // Default: 2 hours after opening (e.g., 8:00 AM -> 10:00 AM)
+        morningCutoff = opening + (2 * 60);
+    }
+    else {
+        // Fallback: 10:59 AM if no operating hours set
+        morningCutoff = 10 * 60 + 59;
+    }
+    // Morning boundary: 1 minute after cutoff (exclusive boundary)
+    const morningBoundary = morningCutoff + 1;
+    // Lunch window: Use agency lunch times, or default 12:00 PM - 12:59 PM
+    const lunchWindowStart = lunchStart ?? 12 * 60; // 12:00 PM default
+    const lunchWindowEnd = lunchEnd ?? (12 * 60 + 59); // 12:59 PM default
+    // Afternoon clock-out window: After closing time
+    // Start: Closing time (e.g., 5:00 PM)
+    // Deadline: Closing time + 1 hour (e.g., 6:00 PM), minimum 6:00 PM
+    const afternoonClockOutStart = closing ?? 17 * 60; // 5:00 PM default
+    const afternoonClockOutDeadline = closing !== null
+        ? Math.max(closing + 60, 18 * 60) // Closing + 1 hour, but at least 6:00 PM
+        : 18 * 60; // 6:00 PM default
+    return {
+        morningCutoff,
+        morningBoundary,
+        lunchWindowStart,
+        lunchWindowEnd,
+        afternoonClockOutStart,
+        afternoonClockOutDeadline,
+    };
+};
+/**
+ * Check if morning clock-in window is still open
+ * Morning clock-in is available until lunch start time - 1 minute (or calculated from opening time)
+ * Uses agency operating hours dynamically
+ */
+const isMorningClockInWindowOpen = (agency, currentTime) => {
+    const currentHour = currentTime.getHours();
+    const currentMinute = currentTime.getMinutes();
+    const currentTimeMinutes = currentHour * 60 + currentMinute;
+    const boundaries = calculateTimeBoundaries(agency);
+    // Morning window is open if current time <= morning cutoff (inclusive)
+    return currentTimeMinutes <= boundaries.morningCutoff;
 };
 /**
  * Determine session type based on server time and agency settings
  * This ensures session determination cannot be manipulated by client device time
+ *
+ * STRICT TIME RULES:
+ * - Morning clock-in: Available until 10:59 AM (or lunch start if earlier)
+ * - Afternoon clock-in: Available if:
+ *   - Current time >= 11:00 AM AND no morning clock-in exists, OR
+ *   - Morning session is complete (both in and out)
+ * - Overtime: Requires only afternoon session complete (morning can be skipped)
  */
 const determineSessionType = (agency, currentTime, existingRecord) => {
-    // Check if regular sessions are complete (for overtime)
-    const morningComplete = existingRecord?.morningTimeIn && existingRecord?.morningTimeOut;
+    // Check for overtime (only requires afternoon completion, not morning)
     const afternoonComplete = existingRecord?.afternoonTimeIn && existingRecord?.afternoonTimeOut;
-    // If both regular sessions are complete, allow overtime
-    if (morningComplete && afternoonComplete) {
+    // If afternoon session is complete, allow overtime
+    if (afternoonComplete) {
         // Check if overtime is already in progress or complete
         if (existingRecord?.overtimeTimeIn && !existingRecord?.overtimeTimeOut) {
             throw new Error("Overtime session is already in progress. Please clock out first.");
@@ -264,84 +339,44 @@ const determineSessionType = (agency, currentTime, existingRecord) => {
         const inProgressSession = morningInProgress ? "morning" : "afternoon";
         throw new Error(`You have an active ${inProgressSession} session. Please clock out before clocking in again.`);
     }
-    // If there's no morning clock-in yet, treat any clock-in as afternoon
-    // This allows students to clock in early (e.g., 11 AM) as afternoon if they missed morning
     const hasMorningClockIn = !!existingRecord?.morningTimeIn;
-    if (!hasMorningClockIn) {
-        return "afternoon";
-    }
-    // Determine session based on lunch times (primary) or operating hours midpoint (fallback)
-    const lunchStart = parseTimeToMinutes(agency?.lunchStartTime);
-    const lunchEnd = parseTimeToMinutes(agency?.lunchEndTime);
-    const opening = parseTimeToMinutes(agency?.openingTime);
-    const closing = parseTimeToMinutes(agency?.closingTime);
+    const morningComplete = existingRecord?.morningTimeIn && existingRecord?.morningTimeOut;
     const currentHour = currentTime.getHours();
     const currentMinute = currentTime.getMinutes();
     const currentTimeMinutes = currentHour * 60 + currentMinute;
+    const boundaries = calculateTimeBoundaries(agency);
+    // If no morning clock-in exists
+    if (!hasMorningClockIn) {
+        // Check if morning window is still open (based on agency hours)
+        if (isMorningClockInWindowOpen(agency, currentTime)) {
+            return "morning";
+        }
+        else {
+            // After morning cutoff, allow afternoon clock-in if no morning exists
+            return "afternoon";
+        }
+    }
+    // If morning exists and is complete, determine based on time
+    if (morningComplete) {
+        // Morning is done, check if we should allow afternoon
+        const lunchStart = parseTimeToMinutes(agency?.lunchStartTime);
+        if (lunchStart !== null) {
+            // Use lunch start as divider (exclusive: < lunchStart = morning, >= lunchStart = afternoon)
+            return currentTimeMinutes < lunchStart ? "morning" : "afternoon";
+        }
+        else {
+            // No lunch time, use morning boundary as divider (exclusive)
+            return currentTimeMinutes < boundaries.morningBoundary ? "morning" : "afternoon";
+        }
+    }
+    // If morning exists but not complete, this shouldn't happen (should be caught by in-progress check)
+    // But fallback: determine based on time
+    const lunchStart = parseTimeToMinutes(agency?.lunchStartTime);
     if (lunchStart !== null) {
-        // Use lunch start time as the divider between morning and afternoon
-        // Handle lunch break that might span midnight
-        if (lunchEnd !== null && lunchEnd < lunchStart) {
-            // Lunch spans midnight (e.g., 11:00 PM - 1:00 AM)
-            // Morning: between lunch end and lunch start
-            // Afternoon: at/after lunch start OR before/at lunch end
-            if (currentTimeMinutes > lunchEnd && currentTimeMinutes < lunchStart) {
-                return "morning";
-            }
-            else {
-                return "afternoon";
-            }
-        }
-        else {
-            // Normal lunch break
-            // Morning: before lunch start
-            // Afternoon: at/after lunch start (includes during lunch break)
-            if (currentTimeMinutes < lunchStart) {
-                return "morning";
-            }
-            else {
-                return "afternoon";
-            }
-        }
+        return currentTimeMinutes < lunchStart ? "morning" : "afternoon";
     }
-    else if (opening !== null && closing !== null) {
-        // No lunch times, use midpoint of operating hours
-        // Handle case where operating hours span midnight
-        if (closing < opening) {
-            // Operating hours span midnight (e.g., 12:00 AM - 5:00 AM)
-            const totalMinutes = 24 * 60 - opening + closing;
-            const midPoint = opening + totalMinutes / 2;
-            // Adjust midpoint if it wraps past midnight
-            if (midPoint >= 24 * 60) {
-                const adjustedMidPoint = midPoint - 24 * 60;
-                // Morning: from opening to adjusted midpoint (wrapping past midnight)
-                // Afternoon: after adjusted midpoint to closing
-                if (currentTimeMinutes >= opening ||
-                    currentTimeMinutes <= adjustedMidPoint) {
-                    return "morning";
-                }
-                else {
-                    return "afternoon";
-                }
-            }
-            else {
-                // Midpoint doesn't wrap
-                if (currentTimeMinutes >= opening && currentTimeMinutes < midPoint) {
-                    return "morning";
-                }
-                else {
-                    return "afternoon";
-                }
-            }
-        }
-        else {
-            // Normal case: operating hours within same day
-            const midPoint = opening + (closing - opening) / 2;
-            return currentTimeMinutes < midPoint ? "morning" : "afternoon";
-        }
-    }
-    // Default to morning if no time constraints
-    return "morning";
+    // Default: use morning boundary as divider (exclusive)
+    return currentTimeMinutes < boundaries.morningBoundary ? "morning" : "afternoon";
 };
 exports.determineSessionType = determineSessionType;
 /**
@@ -352,23 +387,46 @@ const calculateRemarks = (agency, currentTime, sessionType, isClockIn) => {
     if (sessionType === "overtime") {
         return "Normal";
     }
+    // Convert current time to minutes since midnight for accurate comparison
+    const currentHour = currentTime.getHours();
+    const currentMinute = currentTime.getMinutes();
+    const currentTimeMinutes = currentHour * 60 + currentMinute;
     if (isClockIn) {
         // For clock-in: check if late
         if (sessionType === "morning" && agency?.openingTime) {
-            const [hours, minutes] = agency.openingTime.split(":").map(Number);
-            const expectedTime = new Date(currentTime);
-            expectedTime.setHours(hours, minutes || 0, 0, 0);
-            if (currentTime > expectedTime) {
-                return "Late";
+            const openingMinutes = parseTimeToMinutes(agency.openingTime);
+            if (openingMinutes !== null) {
+                // Compare minutes since midnight
+                if (currentTimeMinutes > openingMinutes) {
+                    return "Late";
+                }
             }
         }
         else if (sessionType === "afternoon" && agency?.lunchEndTime) {
             // lunchEndTime is a reference point for determining if afternoon clock-in is late
-            const [hours, minutes] = agency.lunchEndTime.split(":").map(Number);
-            const expectedTime = new Date(currentTime);
-            expectedTime.setHours(hours, minutes || 0, 0, 0);
-            if (currentTime > expectedTime) {
-                return "Late";
+            const lunchEndMinutes = parseTimeToMinutes(agency.lunchEndTime);
+            if (lunchEndMinutes !== null) {
+                // Handle midnight crossover: if lunchEnd is early morning (before 6 AM) and clock-in is late night (after 8 PM)
+                // This means lunchEnd is the next day, so clock-in at 11 PM is BEFORE 1 AM next day = NOT late
+                if (lunchEndMinutes < 360 && currentTimeMinutes > 1200) {
+                    // Lunch end is early morning (next day), clock-in is late night (current day)
+                    // Check if clock-in is before lunch end (considering it's the next day)
+                    // If lunchEnd is 1:00 AM (60 min) and clock-in is 11:00 PM (1380 min)
+                    // We need to check: is 1380 < (60 + 1440)? Yes, so it's not late
+                    const lunchEndNextDay = lunchEndMinutes + (24 * 60); // Add 24 hours
+                    if (currentTimeMinutes < lunchEndNextDay) {
+                        return "Normal"; // Clock-in is before lunch end (next day), so not late
+                    }
+                    else {
+                        return "Late"; // Clock-in is after lunch end (next day), so late
+                    }
+                }
+                else {
+                    // Normal case: compare on same day
+                    if (currentTimeMinutes > lunchEndMinutes) {
+                        return "Late";
+                    }
+                }
             }
         }
         return "Normal";
@@ -377,19 +435,36 @@ const calculateRemarks = (agency, currentTime, sessionType, isClockIn) => {
         // For clock-out: check if early departure
         if (sessionType === "morning" && agency?.lunchStartTime) {
             // lunchStartTime is a reference point for determining if morning clock-out is early
-            const [hours, minutes] = agency.lunchStartTime.split(":").map(Number);
-            const expectedTime = new Date(currentTime);
-            expectedTime.setHours(hours, minutes || 0, 0, 0);
-            if (currentTime < expectedTime) {
-                return "Early Departure";
+            const lunchStartMinutes = parseTimeToMinutes(agency.lunchStartTime);
+            if (lunchStartMinutes !== null) {
+                // Compare minutes since midnight
+                if (currentTimeMinutes < lunchStartMinutes) {
+                    return "Early Departure";
+                }
             }
         }
         else if (sessionType === "afternoon" && agency?.closingTime) {
-            const [hours, minutes] = agency.closingTime.split(":").map(Number);
-            const expectedTime = new Date(currentTime);
-            expectedTime.setHours(hours, minutes || 0, 0, 0);
-            if (currentTime < expectedTime) {
-                return "Early Departure";
+            const closingMinutes = parseTimeToMinutes(agency.closingTime);
+            if (closingMinutes !== null) {
+                // Handle midnight crossover: if closing is early morning (before 6 AM) and clock-out is late night (after 8 PM)
+                // This means closing is the next day, so clock-out at 11 PM is BEFORE 1 AM next day = Early Departure
+                if (closingMinutes < 360 && currentTimeMinutes > 1200) {
+                    // Closing is early morning (next day), clock-out is late night (current day)
+                    // Check if clock-out is before closing (considering it's the next day)
+                    const closingNextDay = closingMinutes + (24 * 60); // Add 24 hours
+                    if (currentTimeMinutes < closingNextDay) {
+                        return "Early Departure"; // Clock-out is before closing (next day), so early
+                    }
+                    else {
+                        return "Normal"; // Clock-out is after closing (next day), so normal
+                    }
+                }
+                else {
+                    // Normal case: compare on same day
+                    if (currentTimeMinutes < closingMinutes) {
+                        return "Early Departure";
+                    }
+                }
             }
         }
         return "Normal";
@@ -443,6 +518,68 @@ const calculateHoursWithLunchExclusion = (morningTimeIn, morningTimeOut, afterno
     return Math.round(totalHours * 100) / 100;
 };
 exports.calculateHoursWithLunchExclusion = calculateHoursWithLunchExclusion;
+/**
+ * Check and nullify missed clock-out windows
+ * - Morning clock-out: Must be during lunch window (12:00 PM - 12:59 PM), otherwise nullify
+ * - Afternoon clock-out: Must be after 5:00 PM - 6:00 PM (or after closing time), otherwise nullify
+ *
+ * IMPORTANT: This function should NOT be called when user is actively clocking out.
+ * It's designed to clean up stale sessions before new clock-in operations.
+ */
+const checkAndNullifyMissedClockOuts = async (record, agency, currentTime, isClockOutOperation = false) => {
+    if (!record)
+        return;
+    const currentHour = currentTime.getHours();
+    const currentMinute = currentTime.getMinutes();
+    const currentTimeMinutes = currentHour * 60 + currentMinute;
+    const updates = {};
+    // Morning clock-out nullification
+    // If morningTimeIn exists but morningTimeOut is null, and we're past lunch window
+    // Morning clock-out must happen during lunch window (lunchStartTime - lunchEndTime inclusive)
+    if (record.morningTimeIn && !record.morningTimeOut) {
+        // Don't nullify if user is actively clocking out (race condition prevention)
+        if (isClockOutOperation) {
+            // Allow clock-out even if past window (user might have valid reason)
+            // But we'll still validate the window in clockOutData
+            return;
+        }
+        const boundaries = calculateTimeBoundaries(agency);
+        // Check if we're past the lunch window
+        // Deadline is lunch end + 1 minute (exclusive: past lunch end means nullify)
+        const lunchWindowDeadline = boundaries.lunchWindowEnd + 1;
+        const isPastLunchWindow = currentTimeMinutes > lunchWindowDeadline;
+        if (isPastLunchWindow) {
+            // Nullify entire morning session (both in and out)
+            updates.morningTimeIn = null;
+            updates.morningTimeOut = null;
+        }
+    }
+    // Afternoon clock-out nullification
+    // If afternoonTimeIn exists but afternoonTimeOut is null, and we're past deadline
+    // Afternoon clock-out must happen after closing time (or closing + 1 hour)
+    if (record.afternoonTimeIn && !record.afternoonTimeOut) {
+        // Don't nullify if user is actively clocking out (race condition prevention)
+        if (isClockOutOperation) {
+            // Allow clock-out even if past window (user might have valid reason)
+            // But we'll still validate the window in clockOutData
+            return;
+        }
+        const boundaries = calculateTimeBoundaries(agency);
+        // Check if we're past the deadline (after closing + 1 hour, exclusive)
+        // Deadline is exclusive: deadline time is valid, deadline + 1 minute is not
+        if (currentTimeMinutes > boundaries.afternoonClockOutDeadline) {
+            // Nullify entire afternoon session (both in and out)
+            updates.afternoonTimeIn = null;
+            updates.afternoonTimeOut = null;
+        }
+    }
+    if (Object.keys(updates).length > 0) {
+        await record.update(updates);
+        // Also update the record object passed in for immediate use
+        Object.assign(record, updates);
+    }
+};
+exports.checkAndNullifyMissedClockOuts = checkAndNullifyMissedClockOuts;
 // Helper function to nullify incomplete sessions at end of day
 const nullifyIncompleteSessions = async (studentId, practicumId, date) => {
     const record = await attendance_record_1.default.findOne({
@@ -500,6 +637,41 @@ const clockInData = async (params) => {
             date: recordDate,
         },
     });
+    // Validate agency data (only log warnings, don't block - times might be in different formats)
+    if (params.agency) {
+        // Check time formats but don't throw errors - parseTimeToMinutes handles various formats
+        // Times might be stored as "HH:MM", "HH:MM:SS", or other formats
+        const lunchStart = parseTimeToMinutes(params.agency.lunchStartTime);
+        const lunchEnd = parseTimeToMinutes(params.agency.lunchEndTime);
+        const opening = parseTimeToMinutes(params.agency.openingTime);
+        const closing = parseTimeToMinutes(params.agency.closingTime);
+        // Only log warnings if times are provided but can't be parsed
+        if (params.agency.lunchStartTime && lunchStart === null) {
+            console.warn(`[Time validation] Could not parse lunch start time: ${params.agency.lunchStartTime}`);
+        }
+        if (params.agency.lunchEndTime && lunchEnd === null) {
+            console.warn(`[Time validation] Could not parse lunch end time: ${params.agency.lunchEndTime}`);
+        }
+        if (params.agency.openingTime && opening === null) {
+            console.warn(`[Time validation] Could not parse opening time: ${params.agency.openingTime}`);
+        }
+        if (params.agency.closingTime && closing === null) {
+            console.warn(`[Time validation] Could not parse closing time: ${params.agency.closingTime}`);
+        }
+    }
+    // Check and nullify missed clock-out windows before determining session type
+    // Only nullify if NOT a clock-out operation (prevent race conditions)
+    if (record && params.agency) {
+        await (0, exports.checkAndNullifyMissedClockOuts)(record, params.agency, now, false);
+        // Reload record to get updated values (use fresh query to avoid stale data)
+        record = await attendance_record_1.default.findOne({
+            where: {
+                studentId: params.studentId,
+                practicumId: params.practicumId,
+                date: recordDate,
+            },
+        });
+    }
     // SECURITY: Determine session type on server side based on server time
     // This prevents client from manipulating device time to change session
     const sessionType = (0, exports.determineSessionType)(params.agency ?? null, now, record);
@@ -546,6 +718,15 @@ const clockInData = async (params) => {
         if (record?.morningTimeIn && !record.morningTimeOut) {
             throw new Error("You are already clocked in for the morning session. Please clock out first.");
         }
+        // Idempotency check: prevent duplicate clock-ins within 5 seconds
+        if (record?.morningTimeIn) {
+            const lastClockIn = new Date(record.morningTimeIn);
+            const timeDiff = now.getTime() - lastClockIn.getTime();
+            if (timeDiff < 5000) { // 5 seconds
+                // Return existing record to prevent duplicate
+                return record;
+            }
+        }
         updateData.morningTimeIn = now;
         updateData.timeIn = now; // Keep for backward compatibility
     }
@@ -554,10 +735,28 @@ const clockInData = async (params) => {
         if (record?.afternoonTimeIn && !record.afternoonTimeOut) {
             throw new Error("You are already clocked in for the afternoon session. Please clock out first.");
         }
+        // Idempotency check: prevent duplicate clock-ins within 5 seconds
+        if (record?.afternoonTimeIn) {
+            const lastClockIn = new Date(record.afternoonTimeIn);
+            const timeDiff = now.getTime() - lastClockIn.getTime();
+            if (timeDiff < 5000) { // 5 seconds
+                // Return existing record to prevent duplicate
+                return record;
+            }
+        }
         // Ensure morning session is completed or nullified
+        // Only nullify if morning session exists but is incomplete (not already nullified)
         if (record?.morningTimeIn && !record.morningTimeOut) {
-            // Nullify incomplete morning session
-            updateData.morningTimeIn = null;
+            // Check if morning session should be nullified based on time
+            // If it's past lunch window, nullify it
+            const currentTimeMinutes = now.getHours() * 60 + now.getMinutes();
+            const boundaries = calculateTimeBoundaries(params.agency ?? null);
+            const lunchWindowEnd = boundaries.lunchWindowEnd + 1; // Exclusive deadline
+            if (currentTimeMinutes > lunchWindowEnd) {
+                // Nullify incomplete morning session (already past window)
+                updateData.morningTimeIn = null;
+                updateData.morningTimeOut = null;
+            }
         }
         updateData.afternoonTimeIn = now;
         updateData.timeIn = now; // Keep for backward compatibility
@@ -567,11 +766,19 @@ const clockInData = async (params) => {
         if (record?.overtimeTimeIn && !record.overtimeTimeOut) {
             throw new Error("You are already clocked in for the overtime session. Please clock out first.");
         }
-        // Ensure both morning and afternoon sessions are complete before allowing overtime
-        const morningComplete = record?.morningTimeIn && record?.morningTimeOut;
+        // Idempotency check: prevent duplicate clock-ins within 5 seconds
+        if (record?.overtimeTimeIn) {
+            const lastClockIn = new Date(record.overtimeTimeIn);
+            const timeDiff = now.getTime() - lastClockIn.getTime();
+            if (timeDiff < 5000) { // 5 seconds
+                // Return existing record to prevent duplicate
+                return record;
+            }
+        }
+        // Only require afternoon session to be complete (morning can be skipped)
         const afternoonComplete = record?.afternoonTimeIn && record?.afternoonTimeOut;
-        if (!morningComplete || !afternoonComplete) {
-            throw new Error("You must complete both morning and afternoon sessions before clocking in for overtime.");
+        if (!afternoonComplete) {
+            throw new Error("You must complete the afternoon session before clocking in for overtime.");
         }
         updateData.overtimeTimeIn = now;
         updateData.timeIn = now; // Keep for backward compatibility
@@ -624,6 +831,40 @@ const clockOutData = async (params) => {
     if (!record) {
         throw new Error("No attendance record found for today to clock out");
     }
+    // Validate agency data (only log warnings, don't block - times might be in different formats)
+    if (params.agency) {
+        // Check time formats but don't throw errors - parseTimeToMinutes handles various formats
+        // Times might be stored as "HH:MM", "HH:MM:SS", or other formats
+        const lunchStart = parseTimeToMinutes(params.agency.lunchStartTime);
+        const lunchEnd = parseTimeToMinutes(params.agency.lunchEndTime);
+        const closing = parseTimeToMinutes(params.agency.closingTime);
+        // Only log warnings if times are provided but can't be parsed
+        if (params.agency.lunchStartTime && lunchStart === null) {
+            console.warn(`[Time validation] Could not parse lunch start time: ${params.agency.lunchStartTime}`);
+        }
+        if (params.agency.lunchEndTime && lunchEnd === null) {
+            console.warn(`[Time validation] Could not parse lunch end time: ${params.agency.lunchEndTime}`);
+        }
+        if (params.agency.closingTime && closing === null) {
+            console.warn(`[Time validation] Could not parse closing time: ${params.agency.closingTime}`);
+        }
+    }
+    // Check and nullify missed clock-out windows before processing clock-out
+    // Pass isClockOutOperation=true to prevent nullification during active clock-out
+    if (params.agency) {
+        await (0, exports.checkAndNullifyMissedClockOuts)(record, params.agency, now, true);
+        // Reload record to get updated values (use fresh query to avoid stale data)
+        const updatedRecord = await attendance_record_1.default.findOne({
+            where: {
+                studentId: params.studentId,
+                practicumId: params.practicumId,
+                date: recordDate,
+            },
+        });
+        if (updatedRecord) {
+            Object.assign(record, updatedRecord.toJSON());
+        }
+    }
     // SECURITY: Determine session type based on which session is in progress
     // This prevents client from manipulating device time to change session
     let sessionType;
@@ -643,6 +884,33 @@ const clockOutData = async (params) => {
         // Fallback: use client-provided sessionType if no session is in progress
         // This should rarely happen, but provides backward compatibility
         sessionType = params.sessionType || "morning";
+    }
+    // Validate clock-out window (warn but don't block - user might have valid reason)
+    if (params.agency && sessionType !== "overtime") {
+        const currentTimeMinutes = now.getHours() * 60 + now.getMinutes();
+        const boundaries = calculateTimeBoundaries(params.agency);
+        if (sessionType === "morning") {
+            // Morning clock-out should be during lunch window (lunchStartTime - lunchEndTime)
+            const isValidWindow = currentTimeMinutes >= boundaries.lunchWindowStart &&
+                currentTimeMinutes <= boundaries.lunchWindowEnd;
+            if (!isValidWindow) {
+                // Log warning but allow clock-out (user might have valid reason)
+                const lunchStartStr = params.agency.lunchStartTime || "12:00 PM";
+                const lunchEndStr = params.agency.lunchEndTime || "12:59 PM";
+                console.warn(`[Clock-out validation] Morning clock-out at ${now.toLocaleTimeString()} is outside lunch window (${lunchStartStr} - ${lunchEndStr})`);
+            }
+        }
+        else if (sessionType === "afternoon") {
+            // Afternoon clock-out should be after closing time (closingTime - closingTime + 1 hour)
+            const isValidWindow = currentTimeMinutes >= boundaries.afternoonClockOutStart &&
+                currentTimeMinutes <= boundaries.afternoonClockOutDeadline;
+            if (!isValidWindow) {
+                // Log warning but allow clock-out (user might have valid reason)
+                const closingStr = params.agency.closingTime || "5:00 PM";
+                const deadlineStr = `${Math.floor(boundaries.afternoonClockOutDeadline / 60)}:${String(boundaries.afternoonClockOutDeadline % 60).padStart(2, '0')}`;
+                console.warn(`[Clock-out validation] Afternoon clock-out at ${now.toLocaleTimeString()} is outside window (after ${closingStr} - ${deadlineStr})`);
+            }
+        }
     }
     // Validate operating hours
     if (params.agency) {

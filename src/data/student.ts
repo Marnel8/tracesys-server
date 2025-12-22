@@ -389,7 +389,12 @@ export const createStudentData = async (studentData: CreateStudentParams) => {
     }
 
     // Create default requirements for the student
-    await createDefaultRequirements(user.id, t, practicum?.agencyId);
+    await createDefaultRequirements(
+      user.id,
+      t,
+      practicum?.agencyId,
+      (sectionRecord as any)?.instructorId || null
+    );
 
     await t.commit();
 
@@ -548,7 +553,8 @@ export const createStudentFromOAuth = async (
 const createDefaultRequirements = async (
   studentId: string,
   transaction: any,
-  agencyId?: string
+  agencyId?: string,
+  instructorId?: string | null
 ) => {
   // Get agency affiliation status if agencyId is provided
   let isSchoolAffiliated = false;
@@ -644,7 +650,10 @@ const createDefaultRequirements = async (
           ...reqData,
           createdBy: systemUser.id,
           isActive: true,
-          appliesToSchoolAffiliated: reqData.appliesToSchoolAffiliated !== undefined ? reqData.appliesToSchoolAffiliated : true,
+          appliesToSchoolAffiliated:
+            reqData.appliesToSchoolAffiliated !== undefined
+              ? reqData.appliesToSchoolAffiliated
+              : true,
         },
         { transaction }
       );
@@ -661,6 +670,7 @@ const createDefaultRequirements = async (
       {
         studentId,
         templateId: template.id,
+        instructorId: instructorId ?? null,
         title: reqData.title,
         description: reqData.description,
         category: reqData.category,
@@ -1213,8 +1223,9 @@ export const getArchivedStudentsData = async (params: {
   page: number;
   limit: number;
   search: string;
+  instructorId?: string;
 }) => {
-  const { page, limit, search } = params;
+  const { page, limit, search, instructorId } = params;
   const offset = (page - 1) * limit;
 
   const whereClause: any = {
@@ -1229,6 +1240,75 @@ export const getArchivedStudentsData = async (params: {
       { email: { [Op.like]: `%${search}%` } },
       { studentId: { [Op.like]: `%${search}%` } },
     ];
+  }
+
+  // If instructorId is provided, restrict to students in that instructor's sections or invited sections
+  let allowedSectionIds: string[] = [];
+  if (instructorId) {
+    const [instructorSections, invitedSections] = await Promise.all([
+      Section.findAll({
+        attributes: ["id"],
+        where: { instructorId },
+      }),
+      Invitation.findAll({
+        attributes: ["sectionId"],
+        where: {
+          createdBy: instructorId,
+          role: "student",
+          sectionId: { [Op.ne]: null },
+        },
+      }),
+    ]);
+
+    allowedSectionIds = Array.from(
+      new Set([
+        ...instructorSections.map((s) => s.id),
+        ...invitedSections
+          .map((i) => i.sectionId)
+          .filter((id): id is string => !!id),
+      ])
+    );
+
+    // If no allowed sections, return empty result early
+    if (allowedSectionIds.length === 0) {
+      return {
+        items: [],
+        pagination: {
+          currentPage: page,
+          totalPages: 0,
+          totalItems: 0,
+          itemsPerPage: limit,
+        },
+      };
+    }
+
+    // Resolve students enrolled in those sections
+    const enrollments = await StudentEnrollment.findAll({
+      attributes: ["studentId"],
+      where: { sectionId: { [Op.in]: allowedSectionIds } },
+      raw: true,
+    });
+    const allowedStudentIds = Array.from(
+      new Set(
+        enrollments
+          .map((e: any) => e.studentId)
+          .filter((id): id is string => !!id)
+      )
+    );
+
+    if (allowedStudentIds.length === 0) {
+      return {
+        items: [],
+        pagination: {
+          currentPage: page,
+          totalPages: 0,
+          totalItems: 0,
+          itemsPerPage: limit,
+        },
+      };
+    }
+
+    whereClause.id = { [Op.in]: allowedStudentIds };
   }
 
   const { count, rows: students } = await User.findAndCountAll({
@@ -1273,7 +1353,9 @@ export const getArchivedStudentsData = async (params: {
 
       const deleter = log.user as User | undefined;
       if (deleter) {
-        const fullName = `${deleter.firstName ?? ""} ${deleter.lastName ?? ""}`.trim();
+        const fullName = `${deleter.firstName ?? ""} ${
+          deleter.lastName ?? ""
+        }`.trim();
         deletedByMap[sid] = fullName || deleter.email || "Unknown";
       } else {
         deletedByMap[sid] = "Unknown";
@@ -1359,7 +1441,7 @@ export const hardDeleteStudentData = async (id: string) => {
       attributes: ["id"],
       transaction: t,
     });
-    
+
     if (requirementIds.length > 0) {
       await RequirementComment.destroy({
         where: {
@@ -1368,7 +1450,7 @@ export const hardDeleteStudentData = async (id: string) => {
         transaction: t,
       });
     }
-    
+
     await Requirement.destroy({
       where: { studentId: id },
       transaction: t,

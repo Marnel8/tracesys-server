@@ -356,11 +356,14 @@ const deleteAnnouncementData = async (id) => {
 exports.deleteAnnouncementData = deleteAnnouncementData;
 const getArchivedAnnouncementsData = async (params) => {
     try {
-        const { page, limit, search } = params;
+        const { page, limit, search, authorId } = params;
         const offset = (page - 1) * limit;
         const whereClause = {
             status: "Archived", // Only include archived announcements
         };
+        if (authorId) {
+            whereClause.authorId = authorId;
+        }
         if (search) {
             whereClause[sequelize_1.Op.or] = [
                 { title: { [sequelize_1.Op.like]: `%${search}%` } },

@@ -24,7 +24,7 @@ const error_1 = require("../utils/error.js");
 const sequelize_1 = require("sequelize");
 const crypto_1 = __importDefault(require("crypto"));
 const createInvitation = async (params) => {
-    const { email, role, departmentId, sectionId, program, createdBy, expiresInDays = 7 } = params;
+    const { email, role, departmentId, sectionId, program, createdBy, expiresInDays = 7, } = params;
     // Check if user already exists in the database
     const existingUser = await user_1.default.findOne({
         where: { email },
@@ -73,7 +73,7 @@ const createInvitation = async (params) => {
 };
 exports.createInvitation = createInvitation;
 const createBulkInvitations = async (params) => {
-    const { emails, role, departmentId, sectionId, program, createdBy, expiresInDays = 7 } = params;
+    const { emails, role, departmentId, sectionId, program, createdBy, expiresInDays = 7, } = params;
     if (!emails || emails.length === 0) {
         throw new error_1.BadRequestError("At least one email address is required.");
     }

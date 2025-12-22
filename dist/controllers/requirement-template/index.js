@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteRequirementTemplateController = exports.updateRequirementTemplateController = exports.getRequirementTemplateController = exports.getRequirementTemplatesController = exports.createRequirementTemplateController = void 0;
+exports.hardDeleteRequirementTemplateController = exports.restoreRequirementTemplateController = exports.archiveRequirementTemplateController = exports.getArchivedRequirementTemplatesController = exports.deleteRequirementTemplateController = exports.updateRequirementTemplateController = exports.getRequirementTemplateController = exports.getRequirementTemplatesController = exports.createRequirementTemplateController = void 0;
 const http_status_codes_1 = require("http-status-codes");
 const error_1 = require("../../utils/error.js");
 const path_1 = __importDefault(require("path"));
@@ -56,12 +56,23 @@ const createRequirementTemplateController = async (req, res) => {
 };
 exports.createRequirementTemplateController = createRequirementTemplateController;
 const getRequirementTemplatesController = async (req, res) => {
-    const { page = 1, limit = 10, search = "", status = "all" } = req.query;
+    const { page = 1, limit = 10, search = "", status = "all", createdBy: createdByQuery } = req.query;
+    const authUser = req.user;
+    let createdBy;
+    // Instructors always see only their own templates
+    if (authUser?.role === "instructor") {
+        createdBy = authUser.id;
+    }
+    else if (createdByQuery) {
+        // Allow admins/students to filter by instructor-created templates
+        createdBy = String(createdByQuery);
+    }
     const result = await (0, requirement_template_1.getRequirementTemplatesData)({
         page: Number(page),
         limit: Number(limit),
         search: search,
         status: status,
+        createdBy,
     });
     res.status(http_status_codes_1.StatusCodes.OK).json({
         success: true,
@@ -134,3 +145,60 @@ const deleteRequirementTemplateController = async (req, res) => {
     });
 };
 exports.deleteRequirementTemplateController = deleteRequirementTemplateController;
+const getArchivedRequirementTemplatesController = async (req, res) => {
+    const { page = 1, limit = 10, search = "" } = req.query;
+    const authUser = req.user;
+    let createdBy;
+    if (authUser?.role === "instructor") {
+        createdBy = authUser.id;
+    }
+    const result = await (0, requirement_template_1.getArchivedRequirementTemplatesData)({
+        page: Number(page),
+        limit: Number(limit),
+        search: search,
+        createdBy,
+    });
+    res.status(http_status_codes_1.StatusCodes.OK).json({
+        success: true,
+        data: result,
+    });
+};
+exports.getArchivedRequirementTemplatesController = getArchivedRequirementTemplatesController;
+const archiveRequirementTemplateController = async (req, res) => {
+    const { id } = req.params;
+    if (!id) {
+        throw new error_1.BadRequestError("Template ID is required");
+    }
+    const template = await (0, requirement_template_1.archiveRequirementTemplateData)(id);
+    res.status(http_status_codes_1.StatusCodes.OK).json({
+        success: true,
+        message: "Requirement template archived successfully",
+        data: template,
+    });
+};
+exports.archiveRequirementTemplateController = archiveRequirementTemplateController;
+const restoreRequirementTemplateController = async (req, res) => {
+    const { id } = req.params;
+    if (!id) {
+        throw new error_1.BadRequestError("Template ID is required");
+    }
+    const template = await (0, requirement_template_1.restoreRequirementTemplateData)(id);
+    res.status(http_status_codes_1.StatusCodes.OK).json({
+        success: true,
+        message: "Requirement template restored successfully",
+        data: template,
+    });
+};
+exports.restoreRequirementTemplateController = restoreRequirementTemplateController;
+const hardDeleteRequirementTemplateController = async (req, res) => {
+    const { id } = req.params;
+    if (!id) {
+        throw new error_1.BadRequestError("Template ID is required");
+    }
+    await (0, requirement_template_1.hardDeleteRequirementTemplateData)(id);
+    res.status(http_status_codes_1.StatusCodes.OK).json({
+        success: true,
+        message: "Requirement template permanently deleted successfully",
+    });
+};
+exports.hardDeleteRequirementTemplateController = hardDeleteRequirementTemplateController;

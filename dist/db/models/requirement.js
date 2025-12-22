@@ -38,6 +38,11 @@ __decorate([
     __metadata("design:type", String)
 ], Requirement.prototype, "templateId", void 0);
 __decorate([
+    (0, sequelize_typescript_1.ForeignKey)(() => user_1.default),
+    (0, sequelize_typescript_1.Column)({ type: sequelize_typescript_1.DataType.UUID, allowNull: true }),
+    __metadata("design:type", String)
+], Requirement.prototype, "instructorId", void 0);
+__decorate([
     (0, sequelize_typescript_1.ForeignKey)(() => practicum_1.default),
     (0, sequelize_typescript_1.Column)({ type: sequelize_typescript_1.DataType.UUID, allowNull: true }),
     __metadata("design:type", String)
@@ -107,6 +112,10 @@ __decorate([
     __metadata("design:type", Number)
 ], Requirement.prototype, "fileSize", void 0);
 __decorate([
+    (0, sequelize_typescript_1.Column)({ type: sequelize_typescript_1.DataType.BOOLEAN, defaultValue: true }),
+    __metadata("design:type", Boolean)
+], Requirement.prototype, "isActive", void 0);
+__decorate([
     sequelize_typescript_1.CreatedAt,
     __metadata("design:type", Date)
 ], Requirement.prototype, "createdAt", void 0);
@@ -126,6 +135,10 @@ __decorate([
     (0, sequelize_typescript_1.BelongsTo)(() => practicum_1.default, "practicumId"),
     __metadata("design:type", practicum_1.default)
 ], Requirement.prototype, "practicum", void 0);
+__decorate([
+    (0, sequelize_typescript_1.BelongsTo)(() => user_1.default, "instructorId"),
+    __metadata("design:type", user_1.default)
+], Requirement.prototype, "instructor", void 0);
 __decorate([
     (0, sequelize_typescript_1.BelongsTo)(() => user_1.default, "approvedBy"),
     __metadata("design:type", user_1.default)

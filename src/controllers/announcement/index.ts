@@ -56,7 +56,12 @@ export const createAnnouncementController = async (req: Request, res: Response) 
 		targets = [],
 	}: AnnouncementData = req.body;
 
-	if (!title || !content || !authorId) {
+	// Always trust authenticated instructor for authoring to avoid cross-instructor leakage
+	const authUser = req.user as any;
+	const resolvedAuthorId =
+		authUser?.role === "instructor" ? authUser.id : authorId;
+
+	if (!title || !content || !resolvedAuthorId) {
 		throw new BadRequestError("Please provide title, content, and author ID.");
 	}
 
@@ -65,7 +70,7 @@ export const createAnnouncementController = async (req: Request, res: Response) 
 		content,
 		priority,
 		status,
-		authorId,
+		authorId: resolvedAuthorId,
 		expiryDate,
 		isPinned,
 		targets,
@@ -89,12 +94,17 @@ export const getAnnouncementsController = async (req: Request, res: Response) =>
 		userId
 	} = req.query;
 
+	// If the requester is an instructor, force scoping to their own announcements
+	const authUser = req.user as any;
+	const resolvedAuthorId =
+		authUser?.role === "instructor" ? authUser.id : (authorId as string | undefined);
+
 	const result = await getAnnouncementsData({
 		page: Number(page),
 		limit: Number(limit),
 		search: search as string,
 		status: "Published",
-		authorId: authorId as string,
+		authorId: resolvedAuthorId,
 		userId: userId as string,
 	});
 
@@ -299,11 +309,14 @@ export const deleteAnnouncementCommentController = async (req: Request, res: Res
 
 export const getArchivedAnnouncementsController = async (req: Request, res: Response) => {
 	const { page = 1, limit = 10, search = "" } = req.query;
+	const authUser = req.user as any;
+	const authorId = authUser?.role === "instructor" ? authUser.id : undefined;
 
 	const result = await getArchivedAnnouncementsData({
 		page: Number(page),
 		limit: Number(limit),
 		search: search as string,
+		authorId,
 	});
 
 	res.status(StatusCodes.OK).json({

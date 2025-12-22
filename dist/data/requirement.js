@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.hardDeleteRequirementData = exports.restoreRequirementData = exports.getArchivedRequirementsData = exports.getStudentUnreadCommentsData = exports.getRequirementCommentsData = exports.createRequirementCommentData = exports.getRequirementStatsData = exports.updateRequirementDueDateData = exports.rejectRequirementData = exports.approveRequirementData = exports.updateRequirementFileData = exports.findRequirementByID = exports.getRequirementsData = exports.createRequirementFromTemplateData = void 0;
+exports.hardDeleteRequirementData = exports.archiveRequirementData = exports.restoreRequirementData = exports.getArchivedRequirementsData = exports.getStudentUnreadCommentsData = exports.getRequirementCommentsData = exports.createRequirementCommentData = exports.getRequirementStatsData = exports.updateRequirementDueDateData = exports.rejectRequirementData = exports.approveRequirementData = exports.updateRequirementFileData = exports.findRequirementByID = exports.getRequirementsData = exports.createRequirementFromTemplateData = void 0;
 const sequelize_1 = require("sequelize");
 const requirement_1 = __importDefault(require("../db/models/requirement.js"));
 const requirement_template_1 = __importDefault(require("../db/models/requirement-template.js"));
@@ -21,6 +21,7 @@ const createRequirementFromTemplateData = async (params) => {
     const requirement = await requirement_1.default.create({
         studentId: params.studentId,
         templateId: template.id,
+        instructorId: params.instructorId ?? null,
         practicumId: params.practicumId ?? null,
         title: template.title,
         description: template.description,
@@ -37,6 +38,13 @@ const getRequirementsData = async (params) => {
     const offset = (page - 1) * limit;
     const where = {};
     const andConditions = [];
+    // Exclude archived requirements by default (include active and null for backward compatibility)
+    andConditions.push({
+        [sequelize_1.Op.or]: [
+            { isActive: true },
+            { isActive: { [sequelize_1.Op.is]: null } }
+        ]
+    });
     if (search) {
         andConditions.push({
             [sequelize_1.Op.or]: [
@@ -67,15 +75,15 @@ const getRequirementsData = async (params) => {
             });
         }
     }
-    // Combine all AND conditions
-    if (andConditions.length > 0) {
-        where[sequelize_1.Op.and] = andConditions;
-    }
     if (studentId) {
         where.studentId = studentId;
     }
     if (practicumId) {
         where.practicumId = practicumId;
+    }
+    // Combine all AND conditions
+    if (andConditions.length > 0) {
+        where[sequelize_1.Op.and] = andConditions;
     }
     // Ensure students under this instructor have requirement rows for all active templates
     if (instructorId) {
@@ -142,6 +150,10 @@ const getRequirementsData = async (params) => {
                 where: {
                     studentId: { [sequelize_1.Op.in]: studentIds },
                     templateId: { [sequelize_1.Op.in]: templateIds },
+                    [sequelize_1.Op.or]: [
+                        { isActive: true },
+                        { isActive: { [sequelize_1.Op.is]: null } } // Include null for backward compatibility
+                    ]
                 },
                 raw: true,
             });
@@ -318,9 +330,15 @@ const updateRequirementDueDateData = async (id, dueDate) => {
 exports.updateRequirementDueDateData = updateRequirementDueDateData;
 const getRequirementStatsData = async (studentId) => {
     try {
-        // Get all requirements for the student
+        // Get all requirements for the student (exclude archived)
         const allRequirements = await requirement_1.default.findAndCountAll({
-            where: { studentId },
+            where: {
+                studentId,
+                [sequelize_1.Op.or]: [
+                    { isActive: true },
+                    { isActive: { [sequelize_1.Op.is]: null } } // Include null for backward compatibility
+                ]
+            },
             include: [
                 { model: requirement_template_1.default, as: "template" },
             ],
@@ -386,7 +404,13 @@ exports.getRequirementCommentsData = getRequirementCommentsData;
 const getStudentUnreadCommentsData = async (studentId, lastCheckTime) => {
     // Get all requirements for the student
     const requirements = await requirement_1.default.findAll({
-        where: { studentId },
+        where: {
+            studentId,
+            [sequelize_1.Op.or]: [
+                { isActive: true },
+                { isActive: { [sequelize_1.Op.is]: null } } // Include null for backward compatibility
+            ]
+        },
         attributes: ["id"],
         raw: true,
     });
@@ -417,27 +441,177 @@ const getStudentUnreadCommentsData = async (studentId, lastCheckTime) => {
     return comments;
 };
 exports.getStudentUnreadCommentsData = getStudentUnreadCommentsData;
-// Archive functions - NOTE: Requirements currently don't have soft delete.
-// These functions return empty results until soft delete is implemented.
-// To implement: Add a deletedAt field or isActive flag to the Requirement model.
+// Archive functions
 const getArchivedRequirementsData = async (params) => {
-    // Return empty results until soft delete is implemented
+    const { page, limit, search } = params;
+    const offset = (page - 1) * limit;
+    const whereClause = {
+        isActive: false, // Only include archived (inactive) requirements
+    };
+    if (search) {
+        whereClause[sequelize_1.Op.or] = [
+            { title: { [sequelize_1.Op.like]: `%${search}%` } },
+            { description: { [sequelize_1.Op.like]: `%${search}%` } },
+            { fileName: { [sequelize_1.Op.like]: `%${search}%` } },
+            { "$student.firstName$": { [sequelize_1.Op.like]: `%${search}%` } },
+            { "$student.lastName$": { [sequelize_1.Op.like]: `%${search}%` } },
+            { "$student.email$": { [sequelize_1.Op.like]: `%${search}%` } },
+            { "$student.studentId$": { [sequelize_1.Op.like]: `%${search}%` } },
+        ];
+    }
+    const { count, rows: requirements } = await requirement_1.default.findAndCountAll({
+        where: whereClause,
+        include: [
+            {
+                model: user_1.default,
+                as: "student",
+                attributes: ["id", "firstName", "lastName", "email", "studentId"],
+            },
+            {
+                model: user_1.default,
+                as: "instructor",
+                attributes: ["id", "firstName", "lastName", "email"],
+            },
+        ],
+        limit,
+        offset,
+        order: [["updatedAt", "DESC"]], // Order by updatedAt (deletion time)
+    });
+    // Look up who deleted each requirement from audit logs (if available)
+    const requirementIds = requirements.map((r) => r.id);
+    let deletedByMap = {};
+    // Note: Audit logging for requirement deletion would need to be implemented
+    // For now, we'll use instructor info if available, or "Unknown"
+    for (const req of requirements) {
+        const reqData = req.toJSON();
+        if (reqData.instructor) {
+            const instructor = reqData.instructor;
+            deletedByMap[req.id] = `${instructor.firstName || ""} ${instructor.lastName || ""}`.trim() || instructor.email || "Unknown";
+        }
+        else {
+            deletedByMap[req.id] = "Unknown";
+        }
+    }
+    // Transform to archive format
+    const items = requirements.map((requirement) => {
+        const reqData = requirement.toJSON();
+        return {
+            id: requirement.id,
+            type: "requirement",
+            name: requirement.title,
+            deletedAt: requirement.updatedAt.toISOString(),
+            deletedBy: deletedByMap[requirement.id] ?? null,
+            meta: {
+                studentName: reqData.student ? `${reqData.student.firstName || ""} ${reqData.student.lastName || ""}`.trim() : null,
+                studentEmail: reqData.student?.email || null,
+                status: requirement.status,
+            },
+            raw: reqData,
+        };
+    });
     return {
-        items: [],
+        items,
         pagination: {
-            currentPage: params.page,
-            totalPages: 0,
-            totalItems: 0,
-            itemsPerPage: params.limit,
+            currentPage: page,
+            totalPages: Math.ceil(count / limit),
+            totalItems: count,
+            itemsPerPage: limit,
         },
     };
 };
 exports.getArchivedRequirementsData = getArchivedRequirementsData;
 const restoreRequirementData = async (id) => {
-    throw new Error("Requirement restore is not yet implemented. Add soft delete support first.");
+    const sequelize = requirement_1.default.sequelize;
+    const t = await sequelize.transaction();
+    try {
+        const requirement = await requirement_1.default.findOne({
+            where: { id, isActive: false },
+            transaction: t,
+        });
+        if (!requirement) {
+            await t.rollback();
+            throw new Error("Archived requirement not found");
+        }
+        // Restore by setting isActive to true
+        await requirement.update({ isActive: true }, { transaction: t });
+        await t.commit();
+        // Fetch the full requirement with associations
+        const restored = await requirement_1.default.findByPk(id, {
+            include: [
+                {
+                    model: user_1.default,
+                    as: "student",
+                    attributes: ["id", "firstName", "lastName", "email", "studentId"],
+                },
+                {
+                    model: user_1.default,
+                    as: "instructor",
+                    attributes: ["id", "firstName", "lastName", "email"],
+                },
+            ],
+        });
+        return restored;
+    }
+    catch (error) {
+        await t.rollback();
+        throw error;
+    }
 };
 exports.restoreRequirementData = restoreRequirementData;
+const archiveRequirementData = async (id) => {
+    const sequelize = requirement_1.default.sequelize;
+    const t = await sequelize.transaction();
+    try {
+        const requirement = await requirement_1.default.findOne({
+            where: {
+                id,
+                [sequelize_1.Op.or]: [
+                    { isActive: true },
+                    { isActive: { [sequelize_1.Op.is]: null } } // Include null for backward compatibility
+                ]
+            },
+            transaction: t,
+        });
+        if (!requirement) {
+            await t.rollback();
+            throw new Error("Requirement not found");
+        }
+        // Archive by setting isActive to false
+        await requirement.update({ isActive: false }, { transaction: t });
+        await t.commit();
+        return requirement;
+    }
+    catch (error) {
+        await t.rollback();
+        throw error;
+    }
+};
+exports.archiveRequirementData = archiveRequirementData;
 const hardDeleteRequirementData = async (id) => {
-    throw new Error("Requirement hard delete is not yet implemented. Add soft delete support first.");
+    const sequelize = requirement_1.default.sequelize;
+    const t = await sequelize.transaction();
+    try {
+        const requirement = await requirement_1.default.findOne({
+            where: { id, isActive: false },
+            transaction: t,
+        });
+        if (!requirement) {
+            await t.rollback();
+            throw new Error("Archived requirement not found");
+        }
+        // Delete related comments first
+        await requirement_comment_1.default.destroy({
+            where: { requirementId: id },
+            transaction: t,
+        });
+        // Then delete the requirement
+        await requirement.destroy({ transaction: t });
+        await t.commit();
+        return { success: true };
+    }
+    catch (error) {
+        await t.rollback();
+        throw error;
+    }
 };
 exports.hardDeleteRequirementData = hardDeleteRequirementData;

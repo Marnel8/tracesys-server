@@ -281,11 +281,14 @@ export const deleteStudentController = async (req: Request, res: Response) => {
 
 export const getArchivedStudentsController = async (req: Request, res: Response) => {
 	const { page = 1, limit = 10, search = "" } = req.query;
+	const authUser = req.user as any;
+	const instructorId = authUser?.role === "instructor" ? authUser.id : undefined;
 
 	const result = await getArchivedStudentsData({
 		page: Number(page),
 		limit: Number(limit),
 		search: search as string,
+		instructorId,
 	});
 
 	res.status(StatusCodes.OK).json({

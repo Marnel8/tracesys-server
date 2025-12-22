@@ -20,6 +20,7 @@ interface CreateRequirementFromTemplateParams {
 	studentId: string;
 	practicumId?: string | null;
 	dueDate?: Date | null;
+	instructorId?: string | null;
 }
 
 interface GetRequirementsParams {
@@ -43,6 +44,7 @@ export const createRequirementFromTemplateData = async (
 	const requirement = await Requirement.create({
 		studentId: params.studentId,
 		templateId: template.id,
+		instructorId: params.instructorId ?? null,
 		practicumId: params.practicumId ?? null,
 		title: template.title,
 		description: template.description,
@@ -61,6 +63,14 @@ export const getRequirementsData = async (params: GetRequirementsParams) => {
 
 	const where: any = {};
 	const andConditions: any[] = [];
+	
+	// Exclude archived requirements by default (include active and null for backward compatibility)
+	andConditions.push({
+		[Op.or]: [
+			{ isActive: true },
+			{ isActive: { [Op.is]: null } }
+		]
+	});
 	
 	if (search) {
 		andConditions.push({
@@ -93,15 +103,16 @@ export const getRequirementsData = async (params: GetRequirementsParams) => {
 		}
 	}
 	
-	// Combine all AND conditions
-	if (andConditions.length > 0) {
-		where[Op.and] = andConditions;
-	}
 	if (studentId) {
 		where.studentId = studentId;
 	}
 	if (practicumId) {
 		where.practicumId = practicumId;
+	}
+	
+	// Combine all AND conditions
+	if (andConditions.length > 0) {
+		where[Op.and] = andConditions;
 	}
 
 	// Ensure students under this instructor have requirement rows for all active templates
@@ -179,6 +190,10 @@ export const getRequirementsData = async (params: GetRequirementsParams) => {
 				where: {
 					studentId: { [Op.in]: studentIds },
 					templateId: { [Op.in]: templateIds },
+					[Op.or]: [
+						{ isActive: true },
+						{ isActive: { [Op.is]: null } } // Include null for backward compatibility
+					]
 				},
 				raw: true,
 			});
@@ -374,9 +389,15 @@ export const updateRequirementDueDateData = async (
 
 export const getRequirementStatsData = async (studentId: string) => {
 	try {
-		// Get all requirements for the student
+		// Get all requirements for the student (exclude archived)
 		const allRequirements = await Requirement.findAndCountAll({
-			where: { studentId },
+			where: { 
+				studentId,
+				[Op.or]: [
+					{ isActive: true },
+					{ isActive: { [Op.is]: null } } // Include null for backward compatibility
+				]
+			},
 			include: [
 				{ model: RequirementTemplate, as: "template" as any },
 			],
@@ -457,7 +478,13 @@ export const getStudentUnreadCommentsData = async (
 ) => {
 	// Get all requirements for the student
 	const requirements = await Requirement.findAll({
-		where: { studentId },
+		where: { 
+			studentId,
+			[Op.or]: [
+				{ isActive: true },
+				{ isActive: { [Op.is]: null } } // Include null for backward compatibility
+			]
+		},
 		attributes: ["id"],
 		raw: true,
 	});
@@ -494,31 +521,202 @@ export const getStudentUnreadCommentsData = async (
 	return comments;
 };
 
-// Archive functions - NOTE: Requirements currently don't have soft delete.
-// These functions return empty results until soft delete is implemented.
-// To implement: Add a deletedAt field or isActive flag to the Requirement model.
+// Archive functions
 export const getArchivedRequirementsData = async (params: {
 	page: number;
 	limit: number;
 	search: string;
 }) => {
-	// Return empty results until soft delete is implemented
+	const { page, limit, search } = params;
+	const offset = (page - 1) * limit;
+
+	const whereClause: any = {
+		isActive: false, // Only include archived (inactive) requirements
+	};
+
+	if (search) {
+		whereClause[Op.or] = [
+			{ title: { [Op.like]: `%${search}%` } },
+			{ description: { [Op.like]: `%${search}%` } },
+			{ fileName: { [Op.like]: `%${search}%` } },
+			{ "$student.firstName$": { [Op.like]: `%${search}%` } },
+			{ "$student.lastName$": { [Op.like]: `%${search}%` } },
+			{ "$student.email$": { [Op.like]: `%${search}%` } },
+			{ "$student.studentId$": { [Op.like]: `%${search}%` } },
+		];
+	}
+
+	const { count, rows: requirements } = await Requirement.findAndCountAll({
+		where: whereClause,
+		include: [
+			{
+				model: User,
+				as: "student",
+				attributes: ["id", "firstName", "lastName", "email", "studentId"],
+			},
+			{
+				model: User,
+				as: "instructor",
+				attributes: ["id", "firstName", "lastName", "email"],
+			},
+		],
+		limit,
+		offset,
+		order: [["updatedAt", "DESC"]], // Order by updatedAt (deletion time)
+	});
+
+	// Look up who deleted each requirement from audit logs (if available)
+	const requirementIds = requirements.map((r) => r.id);
+	let deletedByMap: Record<string, string> = {};
+
+	// Note: Audit logging for requirement deletion would need to be implemented
+	// For now, we'll use instructor info if available, or "Unknown"
+
+	for (const req of requirements) {
+		const reqData = req.toJSON() as any;
+		if (reqData.instructor) {
+			const instructor = reqData.instructor;
+			deletedByMap[req.id] = `${instructor.firstName || ""} ${instructor.lastName || ""}`.trim() || instructor.email || "Unknown";
+		} else {
+			deletedByMap[req.id] = "Unknown";
+		}
+	}
+
+	// Transform to archive format
+	const items = requirements.map((requirement) => {
+		const reqData = requirement.toJSON() as any;
+		return {
+			id: requirement.id,
+			type: "requirement" as const,
+			name: requirement.title,
+			deletedAt: requirement.updatedAt.toISOString(),
+			deletedBy: deletedByMap[requirement.id] ?? null,
+			meta: {
+				studentName: reqData.student ? `${reqData.student.firstName || ""} ${reqData.student.lastName || ""}`.trim() : null,
+				studentEmail: reqData.student?.email || null,
+				status: requirement.status,
+			},
+			raw: reqData,
+		};
+	});
+
 	return {
-		items: [],
+		items,
 		pagination: {
-			currentPage: params.page,
-			totalPages: 0,
-			totalItems: 0,
-			itemsPerPage: params.limit,
+			currentPage: page,
+			totalPages: Math.ceil(count / limit),
+			totalItems: count,
+			itemsPerPage: limit,
 		},
 	};
 };
 
 export const restoreRequirementData = async (id: string) => {
-	throw new Error("Requirement restore is not yet implemented. Add soft delete support first.");
+	const sequelize = Requirement.sequelize!;
+	const t = await sequelize.transaction();
+
+	try {
+		const requirement = await Requirement.findOne({
+			where: { id, isActive: false },
+			transaction: t,
+		});
+
+		if (!requirement) {
+			await t.rollback();
+			throw new Error("Archived requirement not found");
+		}
+
+		// Restore by setting isActive to true
+		await requirement.update({ isActive: true }, { transaction: t });
+
+		await t.commit();
+
+		// Fetch the full requirement with associations
+		const restored = await Requirement.findByPk(id, {
+			include: [
+				{
+					model: User,
+					as: "student",
+					attributes: ["id", "firstName", "lastName", "email", "studentId"],
+				},
+				{
+					model: User,
+					as: "instructor",
+					attributes: ["id", "firstName", "lastName", "email"],
+				},
+			],
+		});
+
+		return restored;
+	} catch (error) {
+		await t.rollback();
+		throw error;
+	}
+};
+
+export const archiveRequirementData = async (id: string) => {
+	const sequelize = Requirement.sequelize!;
+	const t = await sequelize.transaction();
+
+	try {
+		const requirement = await Requirement.findOne({
+			where: { 
+				id,
+				[Op.or]: [
+					{ isActive: true },
+					{ isActive: { [Op.is]: null } } // Include null for backward compatibility
+				]
+			},
+			transaction: t,
+		});
+
+		if (!requirement) {
+			await t.rollback();
+			throw new Error("Requirement not found");
+		}
+
+		// Archive by setting isActive to false
+		await requirement.update({ isActive: false }, { transaction: t });
+
+		await t.commit();
+
+		return requirement;
+	} catch (error) {
+		await t.rollback();
+		throw error;
+	}
 };
 
 export const hardDeleteRequirementData = async (id: string) => {
-	throw new Error("Requirement hard delete is not yet implemented. Add soft delete support first.");
+	const sequelize = Requirement.sequelize!;
+	const t = await sequelize.transaction();
+
+	try {
+		const requirement = await Requirement.findOne({
+			where: { id, isActive: false },
+			transaction: t,
+		});
+
+		if (!requirement) {
+			await t.rollback();
+			throw new Error("Archived requirement not found");
+		}
+
+		// Delete related comments first
+		await RequirementComment.destroy({
+			where: { requirementId: id },
+			transaction: t,
+		});
+
+		// Then delete the requirement
+		await requirement.destroy({ transaction: t });
+
+		await t.commit();
+
+		return { success: true };
+	} catch (error) {
+		await t.rollback();
+		throw error;
+	}
 };
 

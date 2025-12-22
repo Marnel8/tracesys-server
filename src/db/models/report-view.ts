@@ -65,3 +65,4 @@ export default class ReportView extends Model {
 
 
 
+

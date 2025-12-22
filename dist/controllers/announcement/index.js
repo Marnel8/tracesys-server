@@ -6,7 +6,10 @@ const error_1 = require("../../utils/error.js");
 const announcement_1 = require("../../data/announcement.js");
 const createAnnouncementController = async (req, res) => {
     const { title, content, priority = "Medium", status = "Published", authorId, expiryDate, isPinned = false, targets = [], } = req.body;
-    if (!title || !content || !authorId) {
+    // Always trust authenticated instructor for authoring to avoid cross-instructor leakage
+    const authUser = req.user;
+    const resolvedAuthorId = authUser?.role === "instructor" ? authUser.id : authorId;
+    if (!title || !content || !resolvedAuthorId) {
         throw new error_1.BadRequestError("Please provide title, content, and author ID.");
     }
     const announcementData = {
@@ -14,7 +17,7 @@ const createAnnouncementController = async (req, res) => {
         content,
         priority,
         status,
-        authorId,
+        authorId: resolvedAuthorId,
         expiryDate,
         isPinned,
         targets,
@@ -29,12 +32,15 @@ const createAnnouncementController = async (req, res) => {
 exports.createAnnouncementController = createAnnouncementController;
 const getAnnouncementsController = async (req, res) => {
     const { page = 1, limit = 10, search = "", authorId, userId } = req.query;
+    // If the requester is an instructor, force scoping to their own announcements
+    const authUser = req.user;
+    const resolvedAuthorId = authUser?.role === "instructor" ? authUser.id : authorId;
     const result = await (0, announcement_1.getAnnouncementsData)({
         page: Number(page),
         limit: Number(limit),
         search: search,
         status: "Published",
-        authorId: authorId,
+        authorId: resolvedAuthorId,
         userId: userId,
     });
     res.status(http_status_codes_1.StatusCodes.OK).json({
@@ -194,10 +200,13 @@ const deleteAnnouncementCommentController = async (req, res) => {
 exports.deleteAnnouncementCommentController = deleteAnnouncementCommentController;
 const getArchivedAnnouncementsController = async (req, res) => {
     const { page = 1, limit = 10, search = "" } = req.query;
+    const authUser = req.user;
+    const authorId = authUser?.role === "instructor" ? authUser.id : undefined;
     const result = await (0, announcement_1.getArchivedAnnouncementsData)({
         page: Number(page),
         limit: Number(limit),
         search: search,
+        authorId,
     });
     res.status(http_status_codes_1.StatusCodes.OK).json({
         success: true,

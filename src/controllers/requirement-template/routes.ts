@@ -5,6 +5,10 @@ import {
 	getRequirementTemplateController,
 	updateRequirementTemplateController,
 	deleteRequirementTemplateController,
+	getArchivedRequirementTemplatesController,
+	archiveRequirementTemplateController,
+	restoreRequirementTemplateController,
+	hardDeleteRequirementTemplateController,
 } from ".";
 import { isAuthenticated } from "@/middlewares/auth";
 import upload from "@/utils/uploader";
@@ -17,6 +21,28 @@ router.post(
 	isAuthenticated,
 	upload.single("templateFile"),
 	createRequirementTemplateController
+);
+
+// Archive endpoints (placed before /requirement-template/:id to avoid conflicts)
+router.get(
+	"/requirement-template/archives",
+	isAuthenticated,
+	getArchivedRequirementTemplatesController
+);
+router.post(
+	"/requirement-template/:id/archive",
+	isAuthenticated,
+	archiveRequirementTemplateController
+);
+router.post(
+	"/requirement-template/:id/restore",
+	isAuthenticated,
+	restoreRequirementTemplateController
+);
+router.delete(
+	"/requirement-template/:id/hard-delete",
+	isAuthenticated,
+	hardDeleteRequirementTemplateController
 );
 
 // Get all requirement templates with pagination/search

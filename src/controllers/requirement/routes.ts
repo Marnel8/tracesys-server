@@ -17,6 +17,7 @@ import {
 	getArchivedRequirementsController,
 	restoreRequirementController,
 	hardDeleteRequirementController,
+	archiveRequirementController,
 } from ".";
 
 const router = Router();
@@ -33,6 +34,7 @@ router.get("/requirements", isAuthenticated, getRequirementsController);
 
 // Archive endpoints (must come before /requirements/:id to avoid route conflicts)
 router.get("/requirements/archives", isAuthenticated, getArchivedRequirementsController);
+router.post("/requirements/:id/archive", isAuthenticated, archiveRequirementController);
 router.post("/requirements/:id/restore", isAuthenticated, restoreRequirementController);
 router.delete("/requirements/:id/hard-delete", isAuthenticated, hardDeleteRequirementController);
 

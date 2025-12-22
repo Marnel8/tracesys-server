@@ -176,11 +176,14 @@ const deleteSectionData = async (id) => {
 exports.deleteSectionData = deleteSectionData;
 const getArchivedSectionsData = async (params) => {
     try {
-        const { page, limit, search } = params;
+        const { page, limit, search, instructorId } = params;
         const offset = (page - 1) * limit;
         const whereClause = {
             isActive: false, // Only include archived (inactive) sections
         };
+        if (instructorId) {
+            whereClause.instructorId = instructorId;
+        }
         if (search) {
             whereClause[sequelize_1.Op.or] = [
                 { name: { [sequelize_1.Op.like]: `%${search}%` } },

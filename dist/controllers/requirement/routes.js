@@ -14,6 +14,7 @@ router.post("/requirements/from-template", auth_1.isAuthenticated, _1.createRequ
 router.get("/requirements", auth_1.isAuthenticated, _1.getRequirementsController);
 // Archive endpoints (must come before /requirements/:id to avoid route conflicts)
 router.get("/requirements/archives", auth_1.isAuthenticated, _1.getArchivedRequirementsController);
+router.post("/requirements/:id/archive", auth_1.isAuthenticated, _1.archiveRequirementController);
 router.post("/requirements/:id/restore", auth_1.isAuthenticated, _1.restoreRequirementController);
 router.delete("/requirements/:id/hard-delete", auth_1.isAuthenticated, _1.hardDeleteRequirementController);
 // List requirements scoped to instructor
