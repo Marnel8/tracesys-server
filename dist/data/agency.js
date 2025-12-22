@@ -35,10 +35,14 @@ const createAgencyData = async (data) => {
 exports.createAgencyData = createAgencyData;
 const getAgenciesData = async (params) => {
     try {
-        const { page, limit, search, status, branchType } = params;
+        const { page, limit, search, status, branchType, instructorId } = params;
         const offset = (page - 1) * limit;
         // Build where clause
         const whereClause = {};
+        // Filter by instructorId if provided (each instructor should only see their own agencies)
+        if (instructorId) {
+            whereClause.instructorId = instructorId;
+        }
         if (search) {
             whereClause[sequelize_1.Op.or] = [
                 { name: { [sequelize_1.Op.like]: `%${search}%` } },
@@ -46,8 +50,15 @@ const getAgenciesData = async (params) => {
                 { contactEmail: { [sequelize_1.Op.like]: `%${search}%` } },
             ];
         }
+        // When status is "all", default to showing only active agencies (exclude archived ones)
+        // When status is "active", show only active agencies
+        // When status is "inactive", show inactive agencies
         if (status && status !== "all") {
             whereClause.isActive = status === "active";
+        }
+        else {
+            // Default to active agencies when status is "all" to exclude archived ones
+            whereClause.isActive = true;
         }
         if (branchType && branchType !== "all") {
             whereClause.branchType = branchType;

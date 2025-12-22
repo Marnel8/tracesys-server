@@ -33,6 +33,7 @@ interface GetAgenciesParams {
 	search?: string;
 	status?: string;
 	branchType?: string;
+	instructorId?: string;
 }
 
 interface CreateSupervisorParams {
@@ -78,11 +79,16 @@ export const createAgencyData = async (data: CreateAgencyParams) => {
 
 export const getAgenciesData = async (params: GetAgenciesParams) => {
 	try {
-		const { page, limit, search, status, branchType } = params;
+		const { page, limit, search, status, branchType, instructorId } = params;
 		const offset = (page - 1) * limit;
 
 		// Build where clause
 		const whereClause: any = {};
+
+		// Filter by instructorId if provided (each instructor should only see their own agencies)
+		if (instructorId) {
+			whereClause.instructorId = instructorId;
+		}
 
 		if (search) {
 			whereClause[Op.or] = [
@@ -92,8 +98,14 @@ export const getAgenciesData = async (params: GetAgenciesParams) => {
 			];
 		}
 
+		// When status is "all", default to showing only active agencies (exclude archived ones)
+		// When status is "active", show only active agencies
+		// When status is "inactive", show inactive agencies
 		if (status && status !== "all") {
 			whereClause.isActive = status === "active";
+		} else {
+			// Default to active agencies when status is "all" to exclude archived ones
+			whereClause.isActive = true;
 		}
 
 		if (branchType && branchType !== "all") {

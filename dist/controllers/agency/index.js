@@ -56,12 +56,15 @@ const createAgencyController = async (req, res) => {
 exports.createAgencyController = createAgencyController;
 const getAgenciesController = async (req, res) => {
     const { page = 1, limit = 10, search = "", status = "all", branchType = "all" } = req.query;
+    // Get the instructor ID from the authenticated user
+    const instructorId = req.user?.id;
     const result = await (0, agency_1.getAgenciesData)({
         page: Number(page),
         limit: Number(limit),
         search: search,
         status: status,
         branchType: branchType,
+        instructorId: instructorId, // Filter agencies by the authenticated instructor
     });
     res.status(http_status_codes_1.StatusCodes.OK).json({
         success: true,
