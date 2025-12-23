@@ -37,8 +37,6 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.updateAllowLoginWithoutRequirementsController = exports.changePasswordController = exports.editUserController = exports.logoutController = exports.refreshTokenController = exports.getUserDetailsController = exports.resetPasswordController = exports.forgotPasswordController = exports.loginController = exports.activateUserController = exports.registerUserController = void 0;
-const path_1 = __importDefault(require("path"));
-const fs_1 = __importDefault(require("fs"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const send_mail_1 = __importDefault(require("../../utils/send-mail.js"));
 const user_1 = require("../../services/user.js");
@@ -109,26 +107,26 @@ const registerUserController = async (req, res) => {
     };
     const activationToken = (0, user_1.createActivationToken)(user);
     const activationCode = activationToken.activationCode;
-    const data = { user, activationCode };
-    const projectRoot = process.cwd();
-    const candidateAssetDirs = [
-        path_1.default.join(projectRoot, "assets"),
-        path_1.default.join(projectRoot, "src", "assets"),
-        path_1.default.join(projectRoot, "dist", "assets"),
-    ];
-    const assetsDir = candidateAssetDirs.find((p) => fs_1.default.existsSync(p)) || candidateAssetDirs[0];
+    // Send simple email with just the activation code - no template engine
+    const emailText = `
+Hi ${user.firstName || "there"},
+
+Verify your email to get started with TracèSys.
+
+Your activation code is:
+${activationCode}
+
+Code expires in 5 minutes.
+
+If you didn't request this code, you can safely ignore this email.
+
+Need help? Contact support at noreplytracesys@gmail.com
+  `.trim();
     await (0, send_mail_1.default)({
         email: user.email,
         subject: "Activate your account",
-        template: "activation-mail.ejs",
-        data,
-        attachments: [
-            {
-                filename: "logo.png",
-                path: path_1.default.join(assetsDir, "logo.png"),
-                cid: "logo",
-            },
-        ],
+        text: emailText,
+        // No template, no attachments needed for simple email
     });
     res.status(http_status_codes_1.StatusCodes.OK).json({
         success: true,
@@ -244,25 +242,26 @@ const forgotPasswordController = async (req, res) => {
     const code = Math.floor(1000 + Math.random() * 9000).toString();
     const expiresAt = Date.now() + 15 * 60 * 1000;
     passwordResetStore.set(email, { code, expiresAt });
-    const projectRoot = process.cwd();
-    const candidateAssetDirs = [
-        path_1.default.join(projectRoot, "assets"),
-        path_1.default.join(projectRoot, "src", "assets"),
-        path_1.default.join(projectRoot, "dist", "assets"),
-    ];
-    const assetsDir = candidateAssetDirs.find((p) => fs_1.default.existsSync(p)) || candidateAssetDirs[0];
+    // Send simple email with just the reset code - no template engine
+    const emailText = `
+Hi ${user.firstName || "there"},
+
+Reset your password for TracèSys.
+
+Your reset code is:
+${code}
+
+Code expires in 5 minutes.
+
+If you didn't request this code, you can safely ignore this email.
+
+Need help? Contact support at noreplytracesys@gmail.com
+  `.trim();
     await (0, send_mail_1.default)({
         email,
         subject: "Reset your password",
-        template: "activation-mail.ejs",
-        data: { user, activationCode: code },
-        attachments: [
-            {
-                filename: "logo.png",
-                path: path_1.default.join(assetsDir, "logo.png"),
-                cid: "logo",
-            },
-        ],
+        text: emailText,
+        // No template, no attachments needed for simple email
     });
     res
         .status(http_status_codes_1.StatusCodes.OK)

@@ -125,29 +125,28 @@ export const registerUserController = async (req: Request, res: Response) => {
 
   const activationToken = createActivationToken(user);
   const activationCode = activationToken.activationCode;
-  const data = { user, activationCode };
 
-  const projectRoot = process.cwd();
-  const candidateAssetDirs = [
-    path.join(projectRoot, "assets"),
-    path.join(projectRoot, "src", "assets"),
-    path.join(projectRoot, "dist", "assets"),
-  ];
-  const assetsDir =
-    candidateAssetDirs.find((p) => fs.existsSync(p)) || candidateAssetDirs[0];
+  // Send simple email with just the activation code - no template engine
+  const emailText = `
+Hi ${user.firstName || "there"},
+
+Verify your email to get started with TracèSys.
+
+Your activation code is:
+${activationCode}
+
+Code expires in 5 minutes.
+
+If you didn't request this code, you can safely ignore this email.
+
+Need help? Contact support at noreplytracesys@gmail.com
+  `.trim();
 
   await sendMail({
     email: user.email,
     subject: "Activate your account",
-    template: "activation-mail.ejs",
-    data,
-    attachments: [
-      {
-        filename: "logo.png",
-        path: path.join(assetsDir, "logo.png"),
-        cid: "logo",
-      },
-    ],
+    text: emailText,
+    // No template, no attachments needed for simple email
   });
 
   res.status(StatusCodes.OK).json({
@@ -311,27 +310,27 @@ export const forgotPasswordController = async (req: Request, res: Response) => {
   const expiresAt = Date.now() + 15 * 60 * 1000;
   passwordResetStore.set(email, { code, expiresAt });
 
-  const projectRoot = process.cwd();
-  const candidateAssetDirs = [
-    path.join(projectRoot, "assets"),
-    path.join(projectRoot, "src", "assets"),
-    path.join(projectRoot, "dist", "assets"),
-  ];
-  const assetsDir =
-    candidateAssetDirs.find((p) => fs.existsSync(p)) || candidateAssetDirs[0];
+  // Send simple email with just the reset code - no template engine
+  const emailText = `
+Hi ${user.firstName || "there"},
+
+Reset your password for TracèSys.
+
+Your reset code is:
+${code}
+
+Code expires in 5 minutes.
+
+If you didn't request this code, you can safely ignore this email.
+
+Need help? Contact support at noreplytracesys@gmail.com
+  `.trim();
 
   await sendMail({
     email,
     subject: "Reset your password",
-    template: "activation-mail.ejs",
-    data: { user, activationCode: code },
-    attachments: [
-      {
-        filename: "logo.png",
-        path: path.join(assetsDir, "logo.png"),
-        cid: "logo",
-      },
-    ],
+    text: emailText,
+    // No template, no attachments needed for simple email
   });
 
   res

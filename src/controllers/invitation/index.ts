@@ -110,6 +110,13 @@ export const createInvitationController = async (
     process.env.CLIENT_URL ||
     process.env.FRONTEND_URL ||
     "http://localhost:3000";
+
+  // Warn if using localhost in production
+  if (baseUrl.includes("localhost") && process.env.NODE_ENV === "production") {
+    console.warn(
+      `[INVITATION] ⚠ WARNING: Using localhost URL in production! Set CLIENT_URL or FRONTEND_URL environment variable.`
+    );
+  }
   const invitationUrl = new URL(
     `/invitation/accept/${invitation.token}`,
     baseUrl
@@ -136,33 +143,72 @@ export const createInvitationController = async (
   // Send invitation email
   let emailSent = false;
   let emailError: any = null;
+  const logPrefix = `[INVITATION ${new Date().toISOString()}]`;
+
+  console.log(`${logPrefix} Attempting to send invitation email to: ${email}`);
+  console.log(`${logPrefix} Invitation URL: ${invitationUrl.toString()}`);
+
   try {
+    // Send simple email with just the URL - no template engine
+    const emailText = `
+You're invited to join TracèSys as a ${role}.
+
+Click the link below to accept your invitation:
+${invitationUrl.toString()}
+
+${
+  departmentName || departmentId
+    ? `Department: ${departmentName || departmentId}\n`
+    : ""
+}${sectionName || sectionId ? `Section: ${sectionName || sectionId}\n` : ""}${
+      program ? `Program: ${program}\n` : ""
+    }
+This invitation expires in ${expiresInDays || 7} day(s).
+
+If you didn't expect this invitation, you can safely ignore it.
+    `.trim();
+
     await sendMail({
       email: email,
       subject: `Invitation to join TracèSys as ${role}`,
-      template: "invitation-mail.ejs",
-      data: {
-        email,
-        role,
-        invitationUrl: invitationUrl.toString(),
-        departmentId,
-        departmentName,
-        sectionId,
-        sectionName,
-        program,
-        expiresInDays: expiresInDays || 7,
-      },
-      attachments: attachments.length > 0 ? attachments : undefined,
+      text: emailText,
+      // No template, no attachments needed for simple email
     });
     emailSent = true;
-    console.log(`Invitation email sent successfully to ${email}`);
+    console.log(
+      `${logPrefix} ✓ Invitation email sent successfully to ${email}`
+    );
   } catch (error) {
     emailError = error;
-    console.error(`Failed to send invitation email to ${email}:`, error);
+    console.error(`${logPrefix} ✗ Failed to send invitation email to ${email}`);
+    console.error(`${logPrefix} Error details:`, error);
+
     // Log detailed error information
     if (error instanceof Error) {
-      console.error("Error message:", error.message);
-      console.error("Error stack:", error.stack);
+      console.error(`${logPrefix} Error message: ${error.message}`);
+      console.error(`${logPrefix} Error stack:`, error.stack);
+
+      // Log nodemailer specific errors
+      if ((error as any).code) {
+        console.error(
+          `${logPrefix} Nodemailer error code: ${(error as any).code}`
+        );
+      }
+      if ((error as any).command) {
+        console.error(
+          `${logPrefix} Failed SMTP command: ${(error as any).command}`
+        );
+      }
+      if ((error as any).response) {
+        console.error(`${logPrefix} SMTP response: ${(error as any).response}`);
+      }
+      if ((error as any).responseCode) {
+        console.error(
+          `${logPrefix} SMTP response code: ${(error as any).responseCode}`
+        );
+      }
+    } else {
+      console.error(`${logPrefix} Unknown error type:`, typeof error, error);
     }
   }
 
@@ -251,7 +297,9 @@ export const createBulkInvitationsController = async (
       if (sectionId) invitationUrl.searchParams.set("sectionId", sectionId);
       if (program) invitationUrl.searchParams.set("program", program);
 
+      const logPrefix = `[BULK-INVITATION ${new Date().toISOString()}]`;
       try {
+        console.log(`${logPrefix} Sending invitation to: ${invitation.email}`);
         await sendMail({
           email: invitation.email,
           subject: `Invitation to join TracèSys as ${role}`,
@@ -270,16 +318,17 @@ export const createBulkInvitationsController = async (
           attachments: attachments.length > 0 ? attachments : undefined,
         });
         console.log(
-          `Invitation email sent successfully to ${invitation.email}`
+          `${logPrefix} ✓ Invitation email sent successfully to ${invitation.email}`
         );
         return { email: invitation.email, success: true };
       } catch (error) {
         console.error(
-          `Failed to send invitation email to ${invitation.email}:`,
-          error
+          `${logPrefix} ✗ Failed to send invitation email to ${invitation.email}`
         );
+        console.error(`${logPrefix} Error:`, error);
         if (error instanceof Error) {
-          console.error("Error message:", error.message);
+          console.error(`${logPrefix} Error message: ${error.message}`);
+          console.error(`${logPrefix} Error stack:`, error.stack);
         }
         return {
           email: invitation.email,
