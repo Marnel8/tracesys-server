@@ -22,6 +22,9 @@ import {
 	hardDeleteAgencyData
 } from "@/data/agency";
 import { logAuditEvent } from "@/middlewares/audit";
+import User, { UserRole } from "@/db/models/user";
+import StudentEnrollment from "@/db/models/student-enrollment";
+import Section from "@/db/models/section";
 
 // Agency data interface
 interface AgencyData {
@@ -130,8 +133,35 @@ export const createAgencyController = async (req: Request, res: Response) => {
 export const getAgenciesController = async (req: Request, res: Response) => {
 	const { page = 1, limit = 10, search = "", status = "all", branchType = "all" } = req.query;
 
-	// Get the instructor ID from the authenticated user
-	const instructorId = (req.user as any)?.id;
+	const authUser = req.user as any;
+	const userId = authUser?.id;
+	const userRole = authUser?.role;
+
+	let instructorId: string | undefined;
+
+	// If the user is a student, get their instructor from their enrollment
+	if (userRole === UserRole.STUDENT) {
+		const enrollment = await StudentEnrollment.findOne({
+			where: { studentId: userId },
+			include: [
+				{
+					model: Section,
+					as: "section" as any,
+					attributes: ["instructorId"],
+					required: true,
+				},
+			],
+		});
+
+		// Access the section through the enrollment
+		const section = (enrollment as any)?.section as Section | null | undefined;
+		if (section?.instructorId) {
+			instructorId = section.instructorId;
+		}
+	} else if (userRole === UserRole.INSTRUCTOR) {
+		// If the user is an instructor, use their own ID
+		instructorId = userId;
+	}
 
 	const result = await getAgenciesData({
 		page: Number(page),
@@ -139,7 +169,7 @@ export const getAgenciesController = async (req: Request, res: Response) => {
 		search: search as string,
 		status: status as string,
 		branchType: branchType as string,
-		instructorId: instructorId, // Filter agencies by the authenticated instructor
+		instructorId: instructorId, // Filter agencies by the instructor (either the authenticated instructor or the student's instructor)
 	});
 
 	res.status(StatusCodes.OK).json({

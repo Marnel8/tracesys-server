@@ -106,7 +106,10 @@ export const createInvitationController = async (
   });
 
   // Build invitation URL with embedded IDs
-  const baseUrl = process.env.CLIENT_URL || "http://localhost:3000";
+  const baseUrl =
+    process.env.CLIENT_URL ||
+    process.env.FRONTEND_URL ||
+    "http://localhost:3000";
   const invitationUrl = new URL(
     `/invitation/accept/${invitation.token}`,
     baseUrl
@@ -119,7 +122,20 @@ export const createInvitationController = async (
   const departmentName = await getDepartmentName(departmentId);
   const sectionName = await getSectionName(sectionId);
 
+  // Prepare attachments (only if logo exists)
+  const attachments: { filename: string; path: string; cid: string }[] = [];
+  const logoPath = path.join(assetsDir, "logo.png");
+  if (fs.existsSync(logoPath)) {
+    attachments.push({
+      filename: "logo.png",
+      path: logoPath,
+      cid: "logo",
+    });
+  }
+
   // Send invitation email
+  let emailSent = false;
+  let emailError: any = null;
   try {
     await sendMail({
       email: email,
@@ -136,25 +152,33 @@ export const createInvitationController = async (
         program,
         expiresInDays: expiresInDays || 7,
       },
-      attachments: [
-        {
-          filename: "logo.png",
-          path: path.join(assetsDir, "logo.png"),
-          cid: "logo",
-        },
-      ],
+      attachments: attachments.length > 0 ? attachments : undefined,
     });
+    emailSent = true;
+    console.log(`Invitation email sent successfully to ${email}`);
   } catch (error) {
-    console.error("Failed to send invitation email:", error);
-    // Don't fail the request if email fails, invitation is still created
+    emailError = error;
+    console.error(`Failed to send invitation email to ${email}:`, error);
+    // Log detailed error information
+    if (error instanceof Error) {
+      console.error("Error message:", error.message);
+      console.error("Error stack:", error.stack);
+    }
   }
 
   res.status(StatusCodes.CREATED).json({
     success: true,
-    message: "Invitation created and sent successfully",
+    message: emailSent
+      ? "Invitation created and sent successfully"
+      : "Invitation created but email failed to send",
     data: {
       invitation,
       invitationUrl: invitationUrl.toString(),
+      emailSent,
+      ...(emailError && {
+        emailError:
+          emailError instanceof Error ? emailError.message : "Unknown error",
+      }),
     },
   });
 };
@@ -196,64 +220,104 @@ export const createBulkInvitationsController = async (
   });
 
   // Send invitation emails
-  const baseUrl = process.env.FRONTEND_URL || "http://localhost:3000";
-  const emailPromises = invitations.map(async (invitation) => {
-    const deptName = await getDepartmentName(
-      invitation.departmentId || departmentId
-    );
-    const secName = await getSectionName(invitation.sectionId || sectionId);
-    const invitationUrl = new URL(
-      `/invitation/accept/${invitation.token}`,
-      baseUrl
-    );
-    if (departmentId)
-      invitationUrl.searchParams.set("departmentId", departmentId);
-    if (sectionId) invitationUrl.searchParams.set("sectionId", sectionId);
-    if (program) invitationUrl.searchParams.set("program", program);
+  const baseUrl =
+    process.env.CLIENT_URL ||
+    process.env.FRONTEND_URL ||
+    "http://localhost:3000";
 
-    try {
-      await sendMail({
-        email: invitation.email,
-        subject: `Invitation to join TracèSys as ${role}`,
-        template: "invitation-mail.ejs",
-        data: {
-          email: invitation.email,
-          role,
-          invitationUrl: invitationUrl.toString(),
-          departmentId: invitation.departmentId || departmentId,
-          departmentName: deptName,
-          sectionId: invitation.sectionId || sectionId,
-          sectionName: secName,
-          program,
-          expiresInDays: expiresInDays || 7,
-        },
-        attachments: [
-          {
-            filename: "logo.png",
-            path: path.join(assetsDir, "logo.png"),
-            cid: "logo",
-          },
-        ],
-      });
-    } catch (error) {
-      console.error(
-        `Failed to send invitation email to ${invitation.email}:`,
-        error
+  // Prepare attachments (only if logo exists)
+  const attachments: { filename: string; path: string; cid: string }[] = [];
+  const logoPath = path.join(assetsDir, "logo.png");
+  if (fs.existsSync(logoPath)) {
+    attachments.push({
+      filename: "logo.png",
+      path: logoPath,
+      cid: "logo",
+    });
+  }
+
+  const emailResults = await Promise.allSettled(
+    invitations.map(async (invitation) => {
+      const deptName = await getDepartmentName(
+        invitation.departmentId || departmentId
       );
-    }
-  });
+      const secName = await getSectionName(invitation.sectionId || sectionId);
+      const invitationUrl = new URL(
+        `/invitation/accept/${invitation.token}`,
+        baseUrl
+      );
+      if (departmentId)
+        invitationUrl.searchParams.set("departmentId", departmentId);
+      if (sectionId) invitationUrl.searchParams.set("sectionId", sectionId);
+      if (program) invitationUrl.searchParams.set("program", program);
 
-  // Send emails in parallel (don't await to avoid blocking)
-  Promise.all(emailPromises).catch((error) => {
-    console.error("Error sending bulk invitation emails:", error);
-  });
+      try {
+        await sendMail({
+          email: invitation.email,
+          subject: `Invitation to join TracèSys as ${role}`,
+          template: "invitation-mail.ejs",
+          data: {
+            email: invitation.email,
+            role,
+            invitationUrl: invitationUrl.toString(),
+            departmentId: invitation.departmentId || departmentId,
+            departmentName: deptName,
+            sectionId: invitation.sectionId || sectionId,
+            sectionName: secName,
+            program,
+            expiresInDays: expiresInDays || 7,
+          },
+          attachments: attachments.length > 0 ? attachments : undefined,
+        });
+        console.log(
+          `Invitation email sent successfully to ${invitation.email}`
+        );
+        return { email: invitation.email, success: true };
+      } catch (error) {
+        console.error(
+          `Failed to send invitation email to ${invitation.email}:`,
+          error
+        );
+        if (error instanceof Error) {
+          console.error("Error message:", error.message);
+        }
+        return {
+          email: invitation.email,
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    })
+  );
+
+  const successful = emailResults.filter(
+    (result) => result.status === "fulfilled" && result.value.success
+  ).length;
+  const failed = emailResults.filter(
+    (result) =>
+      result.status === "rejected" ||
+      (result.status === "fulfilled" && !result.value.success)
+  );
 
   res.status(StatusCodes.CREATED).json({
     success: true,
-    message: `${invitations.length} invitation(s) created and sent successfully`,
+    message:
+      failed.length > 0
+        ? `${successful} invitation(s) sent successfully, ${failed.length} failed`
+        : `${invitations.length} invitation(s) created and sent successfully`,
     data: {
       invitations,
       count: invitations.length,
+      emailStats: {
+        total: invitations.length,
+        successful,
+        failed: failed.length,
+        ...(failed.length > 0 && {
+          failedEmails: failed.map((f) =>
+            f.status === "fulfilled" ? f.value.email : "unknown"
+          ),
+        }),
+      },
     },
   });
 };

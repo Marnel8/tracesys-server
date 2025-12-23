@@ -66,7 +66,9 @@ const createInvitationController = async (req, res) => {
         expiresInDays,
     });
     // Build invitation URL with embedded IDs
-    const baseUrl = process.env.CLIENT_URL || "http://localhost:3000";
+    const baseUrl = process.env.CLIENT_URL ||
+        process.env.FRONTEND_URL ||
+        "http://localhost:3000";
     const invitationUrl = new URL(`/invitation/accept/${invitation.token}`, baseUrl);
     if (departmentId)
         invitationUrl.searchParams.set("departmentId", departmentId);
@@ -76,7 +78,19 @@ const createInvitationController = async (req, res) => {
         invitationUrl.searchParams.set("program", program);
     const departmentName = await getDepartmentName(departmentId);
     const sectionName = await getSectionName(sectionId);
+    // Prepare attachments (only if logo exists)
+    const attachments = [];
+    const logoPath = path_1.default.join(assetsDir, "logo.png");
+    if (fs_1.default.existsSync(logoPath)) {
+        attachments.push({
+            filename: "logo.png",
+            path: logoPath,
+            cid: "logo",
+        });
+    }
     // Send invitation email
+    let emailSent = false;
+    let emailError = null;
     try {
         await (0, send_mail_1.default)({
             email: email,
@@ -93,25 +107,32 @@ const createInvitationController = async (req, res) => {
                 program,
                 expiresInDays: expiresInDays || 7,
             },
-            attachments: [
-                {
-                    filename: "logo.png",
-                    path: path_1.default.join(assetsDir, "logo.png"),
-                    cid: "logo",
-                },
-            ],
+            attachments: attachments.length > 0 ? attachments : undefined,
         });
+        emailSent = true;
+        console.log(`Invitation email sent successfully to ${email}`);
     }
     catch (error) {
-        console.error("Failed to send invitation email:", error);
-        // Don't fail the request if email fails, invitation is still created
+        emailError = error;
+        console.error(`Failed to send invitation email to ${email}:`, error);
+        // Log detailed error information
+        if (error instanceof Error) {
+            console.error("Error message:", error.message);
+            console.error("Error stack:", error.stack);
+        }
     }
     res.status(http_status_codes_1.StatusCodes.CREATED).json({
         success: true,
-        message: "Invitation created and sent successfully",
+        message: emailSent
+            ? "Invitation created and sent successfully"
+            : "Invitation created but email failed to send",
         data: {
             invitation,
             invitationUrl: invitationUrl.toString(),
+            emailSent,
+            ...(emailError && {
+                emailError: emailError instanceof Error ? emailError.message : "Unknown error",
+            }),
         },
     });
 };
@@ -138,8 +159,20 @@ const createBulkInvitationsController = async (req, res) => {
         expiresInDays,
     });
     // Send invitation emails
-    const baseUrl = process.env.FRONTEND_URL || "http://localhost:3000";
-    const emailPromises = invitations.map(async (invitation) => {
+    const baseUrl = process.env.CLIENT_URL ||
+        process.env.FRONTEND_URL ||
+        "http://localhost:3000";
+    // Prepare attachments (only if logo exists)
+    const attachments = [];
+    const logoPath = path_1.default.join(assetsDir, "logo.png");
+    if (fs_1.default.existsSync(logoPath)) {
+        attachments.push({
+            filename: "logo.png",
+            path: logoPath,
+            cid: "logo",
+        });
+    }
+    const emailResults = await Promise.allSettled(invitations.map(async (invitation) => {
         const deptName = await getDepartmentName(invitation.departmentId || departmentId);
         const secName = await getSectionName(invitation.sectionId || sectionId);
         const invitationUrl = new URL(`/invitation/accept/${invitation.token}`, baseUrl);
@@ -165,29 +198,42 @@ const createBulkInvitationsController = async (req, res) => {
                     program,
                     expiresInDays: expiresInDays || 7,
                 },
-                attachments: [
-                    {
-                        filename: "logo.png",
-                        path: path_1.default.join(assetsDir, "logo.png"),
-                        cid: "logo",
-                    },
-                ],
+                attachments: attachments.length > 0 ? attachments : undefined,
             });
+            console.log(`Invitation email sent successfully to ${invitation.email}`);
+            return { email: invitation.email, success: true };
         }
         catch (error) {
             console.error(`Failed to send invitation email to ${invitation.email}:`, error);
+            if (error instanceof Error) {
+                console.error("Error message:", error.message);
+            }
+            return {
+                email: invitation.email,
+                success: false,
+                error: error instanceof Error ? error.message : "Unknown error",
+            };
         }
-    });
-    // Send emails in parallel (don't await to avoid blocking)
-    Promise.all(emailPromises).catch((error) => {
-        console.error("Error sending bulk invitation emails:", error);
-    });
+    }));
+    const successful = emailResults.filter((result) => result.status === "fulfilled" && result.value.success).length;
+    const failed = emailResults.filter((result) => result.status === "rejected" ||
+        (result.status === "fulfilled" && !result.value.success));
     res.status(http_status_codes_1.StatusCodes.CREATED).json({
         success: true,
-        message: `${invitations.length} invitation(s) created and sent successfully`,
+        message: failed.length > 0
+            ? `${successful} invitation(s) sent successfully, ${failed.length} failed`
+            : `${invitations.length} invitation(s) created and sent successfully`,
         data: {
             invitations,
             count: invitations.length,
+            emailStats: {
+                total: invitations.length,
+                successful,
+                failed: failed.length,
+                ...(failed.length > 0 && {
+                    failedEmails: failed.map((f) => f.status === "fulfilled" ? f.value.email : "unknown"),
+                }),
+            },
         },
     });
 };

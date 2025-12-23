@@ -1,10 +1,16 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getAgencySupervisorStatsController = exports.deleteSupervisorController = exports.updateSupervisorController = exports.getSupervisorController = exports.getSupervisorsController = exports.createSupervisorController = exports.hardDeleteAgencyController = exports.restoreAgencyController = exports.getArchivedAgenciesController = exports.deleteAgencyController = exports.updateAgencyController = exports.getAgencyController = exports.getAgenciesController = exports.createAgencyController = void 0;
 const http_status_codes_1 = require("http-status-codes");
 const error_1 = require("../../utils/error.js");
 const agency_1 = require("../../data/agency.js");
 const audit_1 = require("../../middlewares/audit.js");
+const user_1 = require("../../db/models/user.js");
+const student_enrollment_1 = __importDefault(require("../../db/models/student-enrollment.js"));
+const section_1 = __importDefault(require("../../db/models/section.js"));
 const createAgencyController = async (req, res) => {
     const { name, address, contactPerson, contactRole, contactPhone, contactEmail, branchType, openingTime, closingTime, operatingDays, lunchStartTime, lunchEndTime, isActive = true, latitude, longitude, isSchoolAffiliated = false, } = req.body;
     if (!name || !address || !contactPerson || !contactRole || !contactPhone || !contactEmail || !branchType) {
@@ -56,15 +62,40 @@ const createAgencyController = async (req, res) => {
 exports.createAgencyController = createAgencyController;
 const getAgenciesController = async (req, res) => {
     const { page = 1, limit = 10, search = "", status = "all", branchType = "all" } = req.query;
-    // Get the instructor ID from the authenticated user
-    const instructorId = req.user?.id;
+    const authUser = req.user;
+    const userId = authUser?.id;
+    const userRole = authUser?.role;
+    let instructorId;
+    // If the user is a student, get their instructor from their enrollment
+    if (userRole === user_1.UserRole.STUDENT) {
+        const enrollment = await student_enrollment_1.default.findOne({
+            where: { studentId: userId },
+            include: [
+                {
+                    model: section_1.default,
+                    as: "section",
+                    attributes: ["instructorId"],
+                    required: true,
+                },
+            ],
+        });
+        // Access the section through the enrollment
+        const section = enrollment?.section;
+        if (section?.instructorId) {
+            instructorId = section.instructorId;
+        }
+    }
+    else if (userRole === user_1.UserRole.INSTRUCTOR) {
+        // If the user is an instructor, use their own ID
+        instructorId = userId;
+    }
     const result = await (0, agency_1.getAgenciesData)({
         page: Number(page),
         limit: Number(limit),
         search: search,
         status: status,
         branchType: branchType,
-        instructorId: instructorId, // Filter agencies by the authenticated instructor
+        instructorId: instructorId, // Filter agencies by the instructor (either the authenticated instructor or the student's instructor)
     });
     res.status(http_status_codes_1.StatusCodes.OK).json({
         success: true,
