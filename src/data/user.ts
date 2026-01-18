@@ -631,27 +631,54 @@ export const toggleUserStatusData = async (
 };
 
 export const seedAdminData = async () => {
-  // Check if admin already exists
-  const existingAdmin = await User.findOne({
-    where: { role: UserRole.ADMIN },
+  // Check if an active admin already exists
+  const existingActiveAdmin = await User.findOne({
+    where: { 
+      role: UserRole.ADMIN,
+      isActive: true,
+    },
   });
 
-  if (existingAdmin) {
-    throw new ConflictError("Admin account already exists.");
+  if (existingActiveAdmin) {
+    throw new ConflictError("An active admin account already exists.");
   }
 
-  // Create default admin account
-  const defaultPassword = "Admin@123";
-  const admin = await createUserData({
-    firstName: "Admin",
-    lastName: "User",
-    email: "admin@tracesys.com",
-    password: defaultPassword,
-    phone: "0000000000",
-    role: UserRole.ADMIN,
-    gender: Gender.MALE,
-    age: 30,
+  // Check if admin email already exists (might be inactive)
+  const defaultEmail = "admin@tracesys.com";
+  const existingAdminByEmail = await User.findOne({
+    where: { email: defaultEmail },
   });
+
+  let admin;
+  const defaultPassword = "Admin@123";
+
+  if (existingAdminByEmail) {
+    // If admin exists but is inactive, reactivate and reset password
+    if (existingAdminByEmail.role === UserRole.ADMIN && !existingAdminByEmail.isActive) {
+      existingAdminByEmail.password = defaultPassword;
+      existingAdminByEmail.isActive = true;
+      existingAdminByEmail.emailVerified = true;
+      await existingAdminByEmail.save();
+      admin = existingAdminByEmail;
+    } else {
+      throw new ConflictError(`Email ${defaultEmail} is already in use by another account.`);
+    }
+  } else {
+    // Create new default admin account
+    admin = await createUserData({
+      firstName: "Admin",
+      lastName: "User",
+      email: defaultEmail,
+      password: defaultPassword,
+      phone: "0000000000",
+      role: UserRole.ADMIN,
+      gender: Gender.MALE,
+      age: 30,
+    });
+
+    // Activate immediately
+    await admin.update({ isActive: true, emailVerified: true });
+  }
 
   return {
     user: admin,

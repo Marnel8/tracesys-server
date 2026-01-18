@@ -545,25 +545,51 @@ const toggleUserStatusData = async (userId, isActive) => {
 };
 exports.toggleUserStatusData = toggleUserStatusData;
 const seedAdminData = async () => {
-    // Check if admin already exists
-    const existingAdmin = await user_1.default.findOne({
-        where: { role: user_1.UserRole.ADMIN },
+    // Check if an active admin already exists
+    const existingActiveAdmin = await user_1.default.findOne({
+        where: {
+            role: user_1.UserRole.ADMIN,
+            isActive: true,
+        },
     });
-    if (existingAdmin) {
-        throw new error_1.ConflictError("Admin account already exists.");
+    if (existingActiveAdmin) {
+        throw new error_1.ConflictError("An active admin account already exists.");
     }
-    // Create default admin account
-    const defaultPassword = "Admin@123";
-    const admin = await (0, exports.createUserData)({
-        firstName: "Admin",
-        lastName: "User",
-        email: "admin@tracesys.com",
-        password: defaultPassword,
-        phone: "0000000000",
-        role: user_1.UserRole.ADMIN,
-        gender: user_1.Gender.MALE,
-        age: 30,
+    // Check if admin email already exists (might be inactive)
+    const defaultEmail = "admin@tracesys.com";
+    const existingAdminByEmail = await user_1.default.findOne({
+        where: { email: defaultEmail },
     });
+    let admin;
+    const defaultPassword = "Admin@123";
+    if (existingAdminByEmail) {
+        // If admin exists but is inactive, reactivate and reset password
+        if (existingAdminByEmail.role === user_1.UserRole.ADMIN && !existingAdminByEmail.isActive) {
+            existingAdminByEmail.password = defaultPassword;
+            existingAdminByEmail.isActive = true;
+            existingAdminByEmail.emailVerified = true;
+            await existingAdminByEmail.save();
+            admin = existingAdminByEmail;
+        }
+        else {
+            throw new error_1.ConflictError(`Email ${defaultEmail} is already in use by another account.`);
+        }
+    }
+    else {
+        // Create new default admin account
+        admin = await (0, exports.createUserData)({
+            firstName: "Admin",
+            lastName: "User",
+            email: defaultEmail,
+            password: defaultPassword,
+            phone: "0000000000",
+            role: user_1.UserRole.ADMIN,
+            gender: user_1.Gender.MALE,
+            age: 30,
+        });
+        // Activate immediately
+        await admin.update({ isActive: true, emailVerified: true });
+    }
     return {
         user: admin,
         email: admin.email,
