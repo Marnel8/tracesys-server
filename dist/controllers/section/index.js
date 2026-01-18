@@ -36,13 +36,14 @@ const createSectionController = async (req, res) => {
 exports.createSectionController = createSectionController;
 const getSectionsController = async (req, res) => {
     const { page = 1, limit = 10, search = "", status = "all", courseId, year, semester } = req.query;
-    // Enforce instructor scoping to avoid cross-department leakage.
+    // Allow instructors and admins to view sections
     const authUser = req.user;
     const instructorId = authUser?.id;
     const role = authUser?.role;
-    if (!instructorId || role !== "instructor") {
-        throw new error_1.BadRequestError("Only authenticated instructors can view their sections.");
+    if (!instructorId || (role !== "instructor" && role !== "admin")) {
+        throw new error_1.BadRequestError("Only authenticated instructors and admins can view sections.");
     }
+    // Admins can view all sections, instructors only their own
     const result = await (0, section_1.getSectionsData)({
         page: Number(page),
         limit: Number(limit),
@@ -51,7 +52,7 @@ const getSectionsController = async (req, res) => {
         courseId: courseId,
         year: year,
         semester: semester,
-        instructorId,
+        instructorId: role === "admin" ? undefined : instructorId,
     });
     res.status(http_status_codes_1.StatusCodes.OK).json({
         success: true,
@@ -69,14 +70,15 @@ const getSectionController = async (req, res) => {
     if (!section) {
         throw new error_1.NotFoundError("Section not found");
     }
-    // Guard against cross-instructor access.
+    // Allow instructors and admins to view sections
     const authUser = req.user;
     const instructorId = authUser?.id;
     const role = authUser?.role;
-    if (!instructorId || role !== "instructor") {
-        throw new error_1.BadRequestError("Only authenticated instructors can view their sections.");
+    if (!instructorId || (role !== "instructor" && role !== "admin")) {
+        throw new error_1.BadRequestError("Only authenticated instructors and admins can view sections.");
     }
-    if (section.instructorId !== instructorId) {
+    // Admins can view any section, instructors only their own
+    if (role === "instructor" && section.instructorId !== instructorId) {
         throw new error_1.BadRequestError("You are not allowed to view this section.");
     }
     res.status(http_status_codes_1.StatusCodes.OK).json({

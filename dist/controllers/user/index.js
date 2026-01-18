@@ -36,7 +36,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateAllowLoginWithoutRequirementsController = exports.changePasswordController = exports.editUserController = exports.logoutController = exports.refreshTokenController = exports.getUserDetailsController = exports.resetPasswordController = exports.forgotPasswordController = exports.loginController = exports.activateUserController = exports.registerUserController = void 0;
+exports.seedAdminController = exports.toggleUserStatusController = exports.deleteUserController = exports.createUserAdminController = exports.getUsersController = exports.updateAllowLoginWithoutRequirementsController = exports.changePasswordController = exports.editUserController = exports.logoutController = exports.refreshTokenController = exports.getUserDetailsController = exports.resetPasswordController = exports.forgotPasswordController = exports.loginController = exports.activateUserController = exports.registerUserController = void 0;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const send_mail_1 = __importDefault(require("../../utils/send-mail.js"));
 const user_1 = require("../../services/user.js");
@@ -460,3 +460,116 @@ const updateAllowLoginWithoutRequirementsController = async (req, res) => {
     });
 };
 exports.updateAllowLoginWithoutRequirementsController = updateAllowLoginWithoutRequirementsController;
+// Get all users (admin only)
+const getUsersController = async (req, res) => {
+    const { page, limit, search, role, status, } = req.query;
+    const filters = {
+        page: page ? parseInt(page) : undefined,
+        limit: limit ? parseInt(limit) : undefined,
+        search,
+        role,
+        status,
+    };
+    const result = await (0, user_3.getUsersData)(filters);
+    res.status(http_status_codes_1.StatusCodes.OK).json({
+        success: true,
+        message: "Users retrieved successfully",
+        data: result,
+    });
+};
+exports.getUsersController = getUsersController;
+// Create user (admin only - bypasses activation)
+const createUserAdminController = async (req, res) => {
+    const { firstName, lastName, email, password, role, gender, age, phone, middleName, address, bio, studentId, instructorId, departmentId, } = req.body;
+    if (!firstName || !lastName || !email || !password || !role) {
+        throw new error_1.BadRequestError("Please provide all necessary data.");
+    }
+    // Validate that only admin or instructor roles can be created
+    if (role !== user_2.UserRole.ADMIN && role !== user_2.UserRole.INSTRUCTOR) {
+        throw new error_1.BadRequestError("Admins can only create admin or instructor accounts.");
+    }
+    // Handle avatar upload if provided
+    const avatar = req.cloudUrls && req.cloudUrls.length > 0 ? req.cloudUrls[0] : "";
+    const userData = {
+        firstName,
+        lastName,
+        email,
+        password,
+        role: role,
+        gender,
+        age,
+        phone,
+        middleName,
+        address,
+        bio,
+        studentId,
+        instructorId,
+        departmentId,
+        avatar,
+    };
+    // Create user directly (no activation needed for admin-created users)
+    const user = await (0, user_3.createUserData)(userData);
+    // Activate user immediately
+    await user.update({ isActive: true, emailVerified: true });
+    res.status(http_status_codes_1.StatusCodes.CREATED).json({
+        success: true,
+        message: "User created successfully",
+        user,
+    });
+};
+exports.createUserAdminController = createUserAdminController;
+// Delete user (admin only - hard delete)
+const deleteUserController = async (req, res) => {
+    const { id } = req.params;
+    if (!id) {
+        throw new error_1.BadRequestError("User ID is required.");
+    }
+    // Prevent admin from deleting themselves
+    if (id === req.user?.id) {
+        throw new error_1.BadRequestError("You cannot delete your own account.");
+    }
+    await (0, user_3.deleteUserData)(id);
+    res.status(http_status_codes_1.StatusCodes.OK).json({
+        success: true,
+        message: "User permanently deleted successfully",
+    });
+};
+exports.deleteUserController = deleteUserController;
+// Toggle user status (admin only)
+const toggleUserStatusController = async (req, res) => {
+    const { id } = req.params;
+    const { isActive } = req.body;
+    if (!id) {
+        throw new error_1.BadRequestError("User ID is required.");
+    }
+    if (typeof isActive !== "boolean") {
+        throw new error_1.BadRequestError("isActive must be a boolean.");
+    }
+    // Prevent admin from deactivating themselves
+    if (id === req.user?.id && !isActive) {
+        throw new error_1.BadRequestError("You cannot deactivate your own account.");
+    }
+    const user = await (0, user_3.toggleUserStatusData)(id, isActive);
+    res.status(http_status_codes_1.StatusCodes.OK).json({
+        success: true,
+        message: `User ${isActive ? "activated" : "deactivated"} successfully`,
+        user,
+    });
+};
+exports.toggleUserStatusController = toggleUserStatusController;
+// Seed admin account (development only)
+const seedAdminController = async (req, res) => {
+    // Only allow in development or if explicitly enabled
+    if (process.env.NODE_ENV === "production" &&
+        process.env.ENABLE_ADMIN_SEEDER !== "true") {
+        throw new error_1.ForbiddenError("Seeder is only available in development.");
+    }
+    const result = await (0, user_3.seedAdminData)();
+    res.status(http_status_codes_1.StatusCodes.CREATED).json({
+        success: true,
+        message: "Admin account created successfully",
+        email: result.email,
+        password: result.password,
+    });
+};
+exports.seedAdminController = seedAdminController;

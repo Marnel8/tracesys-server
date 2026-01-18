@@ -22,6 +22,12 @@ router.put("/user/change-password", auth_1.isAuthenticated, _1.changePasswordCon
 router.put("/user/allow-login-without-requirements", auth_1.isAuthenticated, _1.updateAllowLoginWithoutRequirementsController);
 // Edit user
 router.put("/user/:id", auth_1.isAuthenticated, image_handler_1.uploadUserAvatarUpdate, _1.editUserController);
+// Admin-only routes
+router.get("/user", auth_1.isAuthenticated, (0, auth_1.authorizeRoles)("admin"), _1.getUsersController);
+router.post("/user/create", auth_1.isAuthenticated, (0, auth_1.authorizeRoles)("admin"), image_handler_1.uploadUserAvatar, _1.createUserAdminController);
+router.delete("/user/:id", auth_1.isAuthenticated, (0, auth_1.authorizeRoles)("admin"), _1.deleteUserController);
+router.put("/user/:id/status", auth_1.isAuthenticated, (0, auth_1.authorizeRoles)("admin"), _1.toggleUserStatusController);
+router.post("/user/seed-admin", _1.seedAdminController);
 // OAuth routes
 router.get("/auth/google", oauth_google_1.initiateGoogleOAuth);
 router.get("/auth/google/callback", oauth_google_1.handleGoogleOAuthCallback);

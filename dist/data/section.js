@@ -44,9 +44,11 @@ const getSectionsData = async (params) => {
         const { page, limit, search, status, courseId, year, semester, instructorId } = params;
         const offset = (page - 1) * limit;
         // Build where clause
-        const whereClause = {
-            instructorId, // Scope to the authenticated instructor
-        };
+        const whereClause = {};
+        // Only filter by instructorId if provided (admins can view all sections)
+        if (instructorId) {
+            whereClause.instructorId = instructorId;
+        }
         if (search) {
             whereClause[sequelize_1.Op.or] = [
                 { name: { [sequelize_1.Op.like]: `%${search}%` } },

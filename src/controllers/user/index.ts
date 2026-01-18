@@ -13,6 +13,7 @@ import {
   ConflictError,
   NotFoundError,
   UnauthorizedError,
+  ForbiddenError,
 } from "@/utils/error";
 import {
   createUserData,
@@ -20,6 +21,10 @@ import {
   login,
   updateUserData,
   changePasswordData,
+  getUsersData,
+  deleteUserData,
+  toggleUserStatusData,
+  seedAdminData,
 } from "@/data/user";
 import StudentEnrollment from "@/db/models/student-enrollment";
 import Section from "@/db/models/section";
@@ -619,5 +624,172 @@ export const updateAllowLoginWithoutRequirementsController = async (
       id: user.id,
       allowLoginWithoutRequirements: user.allowLoginWithoutRequirements,
     },
+  });
+};
+
+// Get all users (admin only)
+export const getUsersController = async (req: Request, res: Response) => {
+  const {
+    page,
+    limit,
+    search,
+    role,
+    status,
+  } = req.query as {
+    page?: string;
+    limit?: string;
+    search?: string;
+    role?: string;
+    status?: string;
+  };
+
+  const filters = {
+    page: page ? parseInt(page) : undefined,
+    limit: limit ? parseInt(limit) : undefined,
+    search,
+    role,
+    status,
+  };
+
+  const result = await getUsersData(filters);
+
+  res.status(StatusCodes.OK).json({
+    success: true,
+    message: "Users retrieved successfully",
+    data: result,
+  });
+};
+
+// Create user (admin only - bypasses activation)
+export const createUserAdminController = async (req: Request, res: Response) => {
+  const {
+    firstName,
+    lastName,
+    email,
+    password,
+    role,
+    gender,
+    age,
+    phone,
+    middleName,
+    address,
+    bio,
+    studentId,
+    instructorId,
+    departmentId,
+  } = req.body;
+
+  if (!firstName || !lastName || !email || !password || !role) {
+    throw new BadRequestError("Please provide all necessary data.");
+  }
+
+  // Validate that only admin or instructor roles can be created
+  if (role !== UserRole.ADMIN && role !== UserRole.INSTRUCTOR) {
+    throw new BadRequestError("Admins can only create admin or instructor accounts.");
+  }
+
+  // Handle avatar upload if provided
+  const avatar =
+    req.cloudUrls && req.cloudUrls.length > 0 ? req.cloudUrls[0] : "";
+
+  const userData: CreateUserParams = {
+    firstName,
+    lastName,
+    email,
+    password,
+    role: role as UserRole,
+    gender,
+    age,
+    phone,
+    middleName,
+    address,
+    bio,
+    studentId,
+    instructorId,
+    departmentId,
+    avatar,
+  };
+
+  // Create user directly (no activation needed for admin-created users)
+  const user = await createUserData(userData);
+
+  // Activate user immediately
+  await user.update({ isActive: true, emailVerified: true });
+
+  res.status(StatusCodes.CREATED).json({
+    success: true,
+    message: "User created successfully",
+    user,
+  });
+};
+
+// Delete user (admin only - hard delete)
+export const deleteUserController = async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  if (!id) {
+    throw new BadRequestError("User ID is required.");
+  }
+
+  // Prevent admin from deleting themselves
+  if (id === req.user?.id) {
+    throw new BadRequestError("You cannot delete your own account.");
+  }
+
+  await deleteUserData(id);
+
+  res.status(StatusCodes.OK).json({
+    success: true,
+    message: "User permanently deleted successfully",
+  });
+};
+
+// Toggle user status (admin only)
+export const toggleUserStatusController = async (
+  req: Request,
+  res: Response
+) => {
+  const { id } = req.params;
+  const { isActive } = req.body;
+
+  if (!id) {
+    throw new BadRequestError("User ID is required.");
+  }
+
+  if (typeof isActive !== "boolean") {
+    throw new BadRequestError("isActive must be a boolean.");
+  }
+
+  // Prevent admin from deactivating themselves
+  if (id === req.user?.id && !isActive) {
+    throw new BadRequestError("You cannot deactivate your own account.");
+  }
+
+  const user = await toggleUserStatusData(id, isActive);
+
+  res.status(StatusCodes.OK).json({
+    success: true,
+    message: `User ${isActive ? "activated" : "deactivated"} successfully`,
+    user,
+  });
+};
+
+// Seed admin account (development only)
+export const seedAdminController = async (req: Request, res: Response) => {
+  // Only allow in development or if explicitly enabled
+  if (
+    process.env.NODE_ENV === "production" &&
+    process.env.ENABLE_ADMIN_SEEDER !== "true"
+  ) {
+    throw new ForbiddenError("Seeder is only available in development.");
+  }
+
+  const result = await seedAdminData();
+
+  res.status(StatusCodes.CREATED).json({
+    success: true,
+    message: "Admin account created successfully",
+    email: result.email,
+    password: result.password,
   });
 };

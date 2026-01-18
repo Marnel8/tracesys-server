@@ -1,6 +1,20 @@
 import { CreateUserParams } from "@/@types/user";
 import sequelize from "@/db";
-import User, { UserRole } from "@/db/models/user";
+import User, { UserRole, Gender } from "@/db/models/user";
+import Department from "@/db/models/department";
+import Section from "@/db/models/section";
+import StudentEnrollment from "@/db/models/student-enrollment";
+import Requirement from "@/db/models/requirement";
+import RequirementComment from "@/db/models/requirement-comment";
+import Report from "@/db/models/report";
+import ReportView from "@/db/models/report-view";
+import AttendanceRecord from "@/db/models/attendance-record";
+import Practicum from "@/db/models/practicum";
+import Announcement from "@/db/models/announcement";
+import AnnouncementComment from "@/db/models/announcement-comment";
+import Achievement from "@/db/models/achievement";
+import FileAttachment from "@/db/models/file-attachment";
+import Agency from "@/db/models/agency";
 import {
   BadRequestError,
   ConflictError,
@@ -11,6 +25,7 @@ import {
   deleteFromCloudinary,
   extractKeyFromUrl,
 } from "@/utils/cloudinary-uploader";
+import { Op } from "sequelize";
 
 export const findUserByID = async (id: string) => {
   const user = await User.findByPk(id);
@@ -349,4 +364,298 @@ export const changePasswordData = async (
     await t.rollback();
     throw error;
   }
+};
+
+export interface GetUsersFilters {
+  page?: number;
+  limit?: number;
+  search?: string;
+  role?: string;
+  status?: string;
+}
+
+export const getUsersData = async (filters: GetUsersFilters = {}) => {
+  const page = filters.page || 1;
+  const limit = filters.limit || 1000;
+  const offset = (page - 1) * limit;
+
+  const where: any = {};
+
+  // Filter by role
+  if (filters.role && filters.role !== "all") {
+    where.role = filters.role;
+  }
+
+  // Filter by status
+  if (filters.status && filters.status !== "all") {
+    where.isActive = filters.status === "active";
+  }
+
+  // Search filter
+  if (filters.search) {
+    where[Op.or] = [
+      { firstName: { [Op.iLike]: `%${filters.search}%` } },
+      { lastName: { [Op.iLike]: `%${filters.search}%` } },
+      { email: { [Op.iLike]: `%${filters.search}%` } },
+    ];
+  }
+
+  const { count, rows: users } = await User.findAndCountAll({
+    where,
+    limit,
+    offset,
+    order: [["createdAt", "DESC"]],
+    include: [
+      {
+        model: Department,
+        as: "department",
+        required: false,
+      },
+    ],
+  });
+
+  return {
+    users,
+    total: count,
+    page,
+    limit,
+    totalPages: Math.ceil(count / limit),
+  };
+};
+
+export const deleteUserData = async (userId: string) => {
+  const t = await sequelize.transaction();
+
+  try {
+    const user = await User.findByPk(userId, { transaction: t });
+    if (!user) {
+      await t.rollback();
+      throw new NotFoundError("User not found.");
+    }
+
+    const userRole = user.role;
+
+    // Delete student-related records
+    if (userRole === UserRole.STUDENT) {
+      // Delete student enrollments
+      await StudentEnrollment.destroy({
+        where: { studentId: userId },
+        transaction: t,
+      });
+
+      // Delete requirements and their comments
+      const requirementIds = await Requirement.findAll({
+        where: { studentId: userId },
+        attributes: ["id"],
+        transaction: t,
+      });
+      if (requirementIds.length > 0) {
+        await RequirementComment.destroy({
+          where: {
+            requirementId: { [Op.in]: requirementIds.map((r) => r.id) },
+          },
+          transaction: t,
+        });
+      }
+      await Requirement.destroy({
+        where: { studentId: userId },
+        transaction: t,
+      });
+
+      // Delete reports (clear report views first to satisfy FK constraint)
+      const reportIds = await Report.findAll({
+        where: { studentId: userId },
+        attributes: ["id"],
+        transaction: t,
+      });
+
+      if (reportIds.length > 0) {
+        await ReportView.destroy({
+          where: { reportId: { [Op.in]: reportIds.map((r) => r.id) } },
+          transaction: t,
+        });
+      }
+
+      await Report.destroy({
+        where: { studentId: userId },
+        transaction: t,
+      });
+
+      // Delete attendance records
+      await AttendanceRecord.destroy({
+        where: { studentId: userId },
+        transaction: t,
+      });
+
+      // Delete practicums
+      await Practicum.destroy({
+        where: { studentId: userId },
+        transaction: t,
+      });
+
+      // Delete achievements where user is the student
+      await Achievement.destroy({
+        where: { studentId: userId },
+        transaction: t,
+      });
+    }
+
+    // Delete instructor-related records
+    if (userRole === UserRole.INSTRUCTOR) {
+      // Set NULL for sections where user is instructor
+      await Section.update(
+        { instructorId: null },
+        { where: { instructorId: userId }, transaction: t }
+      );
+
+      // Set NULL for departments where user is head
+      await Department.update(
+        { headId: null },
+        { where: { headId: userId }, transaction: t }
+      );
+
+      // Set NULL for agencies where user is instructor
+      await Agency.update(
+        { instructorId: null },
+        { where: { instructorId: userId }, transaction: t }
+      );
+
+      // Delete announcements authored by user
+      const announcementIds = await Announcement.findAll({
+        where: { authorId: userId },
+        attributes: ["id"],
+        transaction: t,
+      });
+      if (announcementIds.length > 0) {
+        await AnnouncementComment.destroy({
+          where: {
+            announcementId: { [Op.in]: announcementIds.map((a) => a.id) },
+          },
+          transaction: t,
+        });
+      }
+      await Announcement.destroy({
+        where: { authorId: userId },
+        transaction: t,
+      });
+    }
+
+    // Delete admin-related records (if any)
+    if (userRole === UserRole.ADMIN) {
+      // Set NULL for departments where admin is head
+      await Department.update(
+        { headId: null },
+        { where: { headId: userId }, transaction: t }
+      );
+    }
+
+    // Delete records that apply to all roles
+    // Delete file attachments
+    await FileAttachment.destroy({
+      where: { uploadedBy: userId },
+      transaction: t,
+    });
+
+    // Set NULL for approvedBy fields in requirements
+    await Requirement.update(
+      { approvedBy: null },
+      { where: { approvedBy: userId }, transaction: t }
+    );
+
+    // Set NULL for approvedBy fields in reports
+    await Report.update(
+      { approvedBy: null },
+      { where: { approvedBy: userId }, transaction: t }
+    );
+
+    // Set NULL for approvedBy fields in attendance records
+    await AttendanceRecord.update(
+      { approvedBy: null },
+      { where: { approvedBy: userId }, transaction: t }
+    );
+
+    // Set NULL for awardedBy fields in achievements
+    await Achievement.update(
+      { awardedBy: null },
+      { where: { awardedBy: userId }, transaction: t }
+    );
+
+    // Delete comments by user
+    await RequirementComment.destroy({
+      where: { userId: userId },
+      transaction: t,
+    });
+
+    await AnnouncementComment.destroy({
+      where: { userId: userId },
+      transaction: t,
+    });
+
+    // Delete avatar from Cloudinary if exists
+    if (user.avatar) {
+      try {
+        const avatarKey = extractKeyFromUrl(user.avatar);
+        if (avatarKey) {
+          await deleteFromCloudinary(avatarKey);
+        }
+      } catch (error) {
+        console.error("Failed to delete avatar from Cloudinary:", error);
+        // Don't throw - continue with user deletion
+      }
+    }
+
+    // Finally, delete the user account
+    await user.destroy({ transaction: t });
+
+    await t.commit();
+
+    return { success: true };
+  } catch (error) {
+    await t.rollback();
+    throw error;
+  }
+};
+
+export const toggleUserStatusData = async (
+  userId: string,
+  isActive: boolean
+) => {
+  const user = await User.findByPk(userId);
+  if (!user) {
+    throw new NotFoundError("User not found.");
+  }
+
+  await user.update({ isActive });
+
+  return user;
+};
+
+export const seedAdminData = async () => {
+  // Check if admin already exists
+  const existingAdmin = await User.findOne({
+    where: { role: UserRole.ADMIN },
+  });
+
+  if (existingAdmin) {
+    throw new ConflictError("Admin account already exists.");
+  }
+
+  // Create default admin account
+  const defaultPassword = "Admin@123";
+  const admin = await createUserData({
+    firstName: "Admin",
+    lastName: "User",
+    email: "admin@tracesys.com",
+    password: defaultPassword,
+    phone: "0000000000",
+    role: UserRole.ADMIN,
+    gender: Gender.MALE,
+    age: 30,
+  });
+
+  return {
+    user: admin,
+    email: admin.email,
+    password: defaultPassword,
+  };
 };

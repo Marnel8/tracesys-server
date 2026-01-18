@@ -68,15 +68,16 @@ export const createSectionController = async (req: Request, res: Response) => {
 export const getSectionsController = async (req: Request, res: Response) => {
 	const { page = 1, limit = 10, search = "", status = "all", courseId, year, semester } = req.query;
 
-	// Enforce instructor scoping to avoid cross-department leakage.
+	// Allow instructors and admins to view sections
 	const authUser = req.user as any;
 	const instructorId = authUser?.id;
 	const role = authUser?.role;
 
-	if (!instructorId || role !== "instructor") {
-		throw new BadRequestError("Only authenticated instructors can view their sections.");
+	if (!instructorId || (role !== "instructor" && role !== "admin")) {
+		throw new BadRequestError("Only authenticated instructors and admins can view sections.");
 	}
 
+	// Admins can view all sections, instructors only their own
 	const result = await getSectionsData({
 		page: Number(page),
 		limit: Number(limit),
@@ -85,7 +86,7 @@ export const getSectionsController = async (req: Request, res: Response) => {
 		courseId: courseId as string,
 		year: year as string,
 		semester: semester as string,
-		instructorId,
+		instructorId: role === "admin" ? undefined : instructorId,
 	});
 
 	res.status(StatusCodes.OK).json({
@@ -108,14 +109,15 @@ export const getSectionController = async (req: Request, res: Response) => {
 		throw new NotFoundError("Section not found");
 	}
 
-	// Guard against cross-instructor access.
+	// Allow instructors and admins to view sections
 	const authUser = req.user as any;
 	const instructorId = authUser?.id;
 	const role = authUser?.role;
-	if (!instructorId || role !== "instructor") {
-		throw new BadRequestError("Only authenticated instructors can view their sections.");
+	if (!instructorId || (role !== "instructor" && role !== "admin")) {
+		throw new BadRequestError("Only authenticated instructors and admins can view sections.");
 	}
-	if ((section as any).instructorId !== instructorId) {
+	// Admins can view any section, instructors only their own
+	if (role === "instructor" && (section as any).instructorId !== instructorId) {
 		throw new BadRequestError("You are not allowed to view this section.");
 	}
 

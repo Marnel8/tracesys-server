@@ -33,7 +33,7 @@ interface GetSectionsParams {
 	courseId?: string;
 	year?: string;
 	semester?: string;
-	instructorId: string;
+	instructorId?: string; // Optional - admins can view all sections
 }
 
 export const createSectionData = async (data: CreateSectionParams) => {
@@ -71,9 +71,12 @@ export const getSectionsData = async (params: GetSectionsParams) => {
 		const offset = (page - 1) * limit;
 
 		// Build where clause
-		const whereClause: any = {
-			instructorId, // Scope to the authenticated instructor
-		};
+		const whereClause: any = {};
+		
+		// Only filter by instructorId if provided (admins can view all sections)
+		if (instructorId) {
+			whereClause.instructorId = instructorId;
+		}
 
 		if (search) {
 			whereClause[Op.or] = [

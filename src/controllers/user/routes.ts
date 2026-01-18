@@ -11,6 +11,11 @@ import {
 	editUserController,
 	changePasswordController,
 	updateAllowLoginWithoutRequirementsController,
+	getUsersController,
+	createUserAdminController,
+	deleteUserController,
+	toggleUserStatusController,
+	seedAdminController,
 } from ".";
 import { handleOAuthCallback } from "../auth/oauth-callback";
 import {
@@ -19,7 +24,7 @@ import {
 } from "../auth/oauth-google";
 import upload from "@/utils/uploader";
 import { uploadUserAvatarUpdate, uploadUserAvatar } from "@/utils/image-handler";
-import { isAuthenticated } from "@/middlewares/auth";
+import { isAuthenticated, authorizeRoles } from "@/middlewares/auth";
 
 const router = Router();
 
@@ -43,6 +48,13 @@ router.put("/user/change-password", isAuthenticated, changePasswordController);
 router.put("/user/allow-login-without-requirements", isAuthenticated, updateAllowLoginWithoutRequirementsController);
 // Edit user
 router.put("/user/:id", isAuthenticated, uploadUserAvatarUpdate, editUserController);
+
+// Admin-only routes
+router.get("/user", isAuthenticated, authorizeRoles("admin"), getUsersController);
+router.post("/user/create", isAuthenticated, authorizeRoles("admin"), uploadUserAvatar, createUserAdminController);
+router.delete("/user/:id", isAuthenticated, authorizeRoles("admin"), deleteUserController);
+router.put("/user/:id/status", isAuthenticated, authorizeRoles("admin"), toggleUserStatusController);
+router.post("/user/seed-admin", seedAdminController);
 
 // OAuth routes
 router.get("/auth/google", initiateGoogleOAuth);

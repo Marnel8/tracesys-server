@@ -36,11 +36,26 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.changePasswordData = exports.updateUserData = exports.login = exports.createUserData = exports.findUserByID = void 0;
+exports.seedAdminData = exports.toggleUserStatusData = exports.deleteUserData = exports.getUsersData = exports.changePasswordData = exports.updateUserData = exports.login = exports.createUserData = exports.findUserByID = void 0;
 const db_1 = __importDefault(require("../db/index.js"));
 const user_1 = __importStar(require("../db/models/user.js"));
+const department_1 = __importDefault(require("../db/models/department.js"));
+const section_1 = __importDefault(require("../db/models/section.js"));
+const student_enrollment_1 = __importDefault(require("../db/models/student-enrollment.js"));
+const requirement_1 = __importDefault(require("../db/models/requirement.js"));
+const requirement_comment_1 = __importDefault(require("../db/models/requirement-comment.js"));
+const report_1 = __importDefault(require("../db/models/report.js"));
+const report_view_1 = __importDefault(require("../db/models/report-view.js"));
+const attendance_record_1 = __importDefault(require("../db/models/attendance-record.js"));
+const practicum_1 = __importDefault(require("../db/models/practicum.js"));
+const announcement_1 = __importDefault(require("../db/models/announcement.js"));
+const announcement_comment_1 = __importDefault(require("../db/models/announcement-comment.js"));
+const achievement_1 = __importDefault(require("../db/models/achievement.js"));
+const file_attachment_1 = __importDefault(require("../db/models/file-attachment.js"));
+const agency_1 = __importDefault(require("../db/models/agency.js"));
 const error_1 = require("../utils/error.js");
 const cloudinary_uploader_1 = require("../utils/cloudinary-uploader.js");
+const sequelize_1 = require("sequelize");
 const findUserByID = async (id) => {
     const user = await user_1.default.findByPk(id);
     if (!user)
@@ -332,3 +347,227 @@ const changePasswordData = async (userId, currentPassword, newPassword) => {
     }
 };
 exports.changePasswordData = changePasswordData;
+const getUsersData = async (filters = {}) => {
+    const page = filters.page || 1;
+    const limit = filters.limit || 1000;
+    const offset = (page - 1) * limit;
+    const where = {};
+    // Filter by role
+    if (filters.role && filters.role !== "all") {
+        where.role = filters.role;
+    }
+    // Filter by status
+    if (filters.status && filters.status !== "all") {
+        where.isActive = filters.status === "active";
+    }
+    // Search filter
+    if (filters.search) {
+        where[sequelize_1.Op.or] = [
+            { firstName: { [sequelize_1.Op.iLike]: `%${filters.search}%` } },
+            { lastName: { [sequelize_1.Op.iLike]: `%${filters.search}%` } },
+            { email: { [sequelize_1.Op.iLike]: `%${filters.search}%` } },
+        ];
+    }
+    const { count, rows: users } = await user_1.default.findAndCountAll({
+        where,
+        limit,
+        offset,
+        order: [["createdAt", "DESC"]],
+        include: [
+            {
+                model: department_1.default,
+                as: "department",
+                required: false,
+            },
+        ],
+    });
+    return {
+        users,
+        total: count,
+        page,
+        limit,
+        totalPages: Math.ceil(count / limit),
+    };
+};
+exports.getUsersData = getUsersData;
+const deleteUserData = async (userId) => {
+    const t = await db_1.default.transaction();
+    try {
+        const user = await user_1.default.findByPk(userId, { transaction: t });
+        if (!user) {
+            await t.rollback();
+            throw new error_1.NotFoundError("User not found.");
+        }
+        const userRole = user.role;
+        // Delete student-related records
+        if (userRole === user_1.UserRole.STUDENT) {
+            // Delete student enrollments
+            await student_enrollment_1.default.destroy({
+                where: { studentId: userId },
+                transaction: t,
+            });
+            // Delete requirements and their comments
+            const requirementIds = await requirement_1.default.findAll({
+                where: { studentId: userId },
+                attributes: ["id"],
+                transaction: t,
+            });
+            if (requirementIds.length > 0) {
+                await requirement_comment_1.default.destroy({
+                    where: {
+                        requirementId: { [sequelize_1.Op.in]: requirementIds.map((r) => r.id) },
+                    },
+                    transaction: t,
+                });
+            }
+            await requirement_1.default.destroy({
+                where: { studentId: userId },
+                transaction: t,
+            });
+            // Delete reports (clear report views first to satisfy FK constraint)
+            const reportIds = await report_1.default.findAll({
+                where: { studentId: userId },
+                attributes: ["id"],
+                transaction: t,
+            });
+            if (reportIds.length > 0) {
+                await report_view_1.default.destroy({
+                    where: { reportId: { [sequelize_1.Op.in]: reportIds.map((r) => r.id) } },
+                    transaction: t,
+                });
+            }
+            await report_1.default.destroy({
+                where: { studentId: userId },
+                transaction: t,
+            });
+            // Delete attendance records
+            await attendance_record_1.default.destroy({
+                where: { studentId: userId },
+                transaction: t,
+            });
+            // Delete practicums
+            await practicum_1.default.destroy({
+                where: { studentId: userId },
+                transaction: t,
+            });
+            // Delete achievements where user is the student
+            await achievement_1.default.destroy({
+                where: { studentId: userId },
+                transaction: t,
+            });
+        }
+        // Delete instructor-related records
+        if (userRole === user_1.UserRole.INSTRUCTOR) {
+            // Set NULL for sections where user is instructor
+            await section_1.default.update({ instructorId: null }, { where: { instructorId: userId }, transaction: t });
+            // Set NULL for departments where user is head
+            await department_1.default.update({ headId: null }, { where: { headId: userId }, transaction: t });
+            // Set NULL for agencies where user is instructor
+            await agency_1.default.update({ instructorId: null }, { where: { instructorId: userId }, transaction: t });
+            // Delete announcements authored by user
+            const announcementIds = await announcement_1.default.findAll({
+                where: { authorId: userId },
+                attributes: ["id"],
+                transaction: t,
+            });
+            if (announcementIds.length > 0) {
+                await announcement_comment_1.default.destroy({
+                    where: {
+                        announcementId: { [sequelize_1.Op.in]: announcementIds.map((a) => a.id) },
+                    },
+                    transaction: t,
+                });
+            }
+            await announcement_1.default.destroy({
+                where: { authorId: userId },
+                transaction: t,
+            });
+        }
+        // Delete admin-related records (if any)
+        if (userRole === user_1.UserRole.ADMIN) {
+            // Set NULL for departments where admin is head
+            await department_1.default.update({ headId: null }, { where: { headId: userId }, transaction: t });
+        }
+        // Delete records that apply to all roles
+        // Delete file attachments
+        await file_attachment_1.default.destroy({
+            where: { uploadedBy: userId },
+            transaction: t,
+        });
+        // Set NULL for approvedBy fields in requirements
+        await requirement_1.default.update({ approvedBy: null }, { where: { approvedBy: userId }, transaction: t });
+        // Set NULL for approvedBy fields in reports
+        await report_1.default.update({ approvedBy: null }, { where: { approvedBy: userId }, transaction: t });
+        // Set NULL for approvedBy fields in attendance records
+        await attendance_record_1.default.update({ approvedBy: null }, { where: { approvedBy: userId }, transaction: t });
+        // Set NULL for awardedBy fields in achievements
+        await achievement_1.default.update({ awardedBy: null }, { where: { awardedBy: userId }, transaction: t });
+        // Delete comments by user
+        await requirement_comment_1.default.destroy({
+            where: { userId: userId },
+            transaction: t,
+        });
+        await announcement_comment_1.default.destroy({
+            where: { userId: userId },
+            transaction: t,
+        });
+        // Delete avatar from Cloudinary if exists
+        if (user.avatar) {
+            try {
+                const avatarKey = (0, cloudinary_uploader_1.extractKeyFromUrl)(user.avatar);
+                if (avatarKey) {
+                    await (0, cloudinary_uploader_1.deleteFromCloudinary)(avatarKey);
+                }
+            }
+            catch (error) {
+                console.error("Failed to delete avatar from Cloudinary:", error);
+                // Don't throw - continue with user deletion
+            }
+        }
+        // Finally, delete the user account
+        await user.destroy({ transaction: t });
+        await t.commit();
+        return { success: true };
+    }
+    catch (error) {
+        await t.rollback();
+        throw error;
+    }
+};
+exports.deleteUserData = deleteUserData;
+const toggleUserStatusData = async (userId, isActive) => {
+    const user = await user_1.default.findByPk(userId);
+    if (!user) {
+        throw new error_1.NotFoundError("User not found.");
+    }
+    await user.update({ isActive });
+    return user;
+};
+exports.toggleUserStatusData = toggleUserStatusData;
+const seedAdminData = async () => {
+    // Check if admin already exists
+    const existingAdmin = await user_1.default.findOne({
+        where: { role: user_1.UserRole.ADMIN },
+    });
+    if (existingAdmin) {
+        throw new error_1.ConflictError("Admin account already exists.");
+    }
+    // Create default admin account
+    const defaultPassword = "Admin@123";
+    const admin = await (0, exports.createUserData)({
+        firstName: "Admin",
+        lastName: "User",
+        email: "admin@tracesys.com",
+        password: defaultPassword,
+        phone: "0000000000",
+        role: user_1.UserRole.ADMIN,
+        gender: user_1.Gender.MALE,
+        age: 30,
+    });
+    return {
+        user: admin,
+        email: admin.email,
+        password: defaultPassword,
+    };
+};
+exports.seedAdminData = seedAdminData;
