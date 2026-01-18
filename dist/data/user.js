@@ -69,10 +69,10 @@ const createUserData = async (userData) => {
     const avatar = userData?.avatar || "";
     try {
         // Uniqueness pre-checks to provide clear errors before attempting insert
-        // Check email uniqueness
+        // Check email uniqueness (case-insensitive for production compatibility)
         if (userData.email) {
             const existingByEmail = await user_1.default.findOne({
-                where: { email: userData.email },
+                where: sequelize_1.Sequelize.where(sequelize_1.Sequelize.fn('LOWER', sequelize_1.Sequelize.col('email')), userData.email.toLowerCase()),
                 transaction: t,
             });
             if (existingByEmail) {
@@ -208,10 +208,9 @@ const createUserData = async (userData) => {
 };
 exports.createUserData = createUserData;
 const login = async ({ email, password, }) => {
+    // Use case-insensitive email lookup for production compatibility (MySQL)
     const user = await user_1.default.findOne({
-        where: {
-            email,
-        },
+        where: sequelize_1.Sequelize.where(sequelize_1.Sequelize.fn('LOWER', sequelize_1.Sequelize.col('email')), email.toLowerCase()),
     });
     if (!user) {
         throw new error_1.NotFoundError("User not found.");
@@ -232,10 +231,10 @@ const updateUserData = async (id, userData) => {
         await t.rollback();
         throw new error_1.NotFoundError("User not found.");
     }
-    // Check if email is being updated and if it already exists
-    if (userData.email && userData.email !== user.email) {
+    // Check if email is being updated and if it already exists (case-insensitive)
+    if (userData.email && userData.email.toLowerCase() !== user.email.toLowerCase()) {
         const existingUser = await user_1.default.findOne({
-            where: { email: userData.email },
+            where: sequelize_1.Sequelize.where(sequelize_1.Sequelize.fn('LOWER', sequelize_1.Sequelize.col('email')), userData.email.toLowerCase()),
         });
         if (existingUser) {
             await t.rollback();
@@ -545,50 +544,67 @@ const toggleUserStatusData = async (userId, isActive) => {
 };
 exports.toggleUserStatusData = toggleUserStatusData;
 const seedAdminData = async () => {
-    // Check if an active admin already exists
-    const existingActiveAdmin = await user_1.default.findOne({
-        where: {
-            role: user_1.UserRole.ADMIN,
-            isActive: true,
-        },
-    });
-    if (existingActiveAdmin) {
-        throw new error_1.ConflictError("An active admin account already exists.");
-    }
-    // Check if admin email already exists (might be inactive)
     const defaultEmail = "admin@tracesys.com";
+    const defaultPassword = "Admin@123";
+    // Check if admin email already exists (case-insensitive for production compatibility)
     const existingAdminByEmail = await user_1.default.findOne({
-        where: { email: defaultEmail },
+        where: sequelize_1.Sequelize.where(sequelize_1.Sequelize.fn('LOWER', sequelize_1.Sequelize.col('email')), defaultEmail.toLowerCase()),
     });
     let admin;
-    const defaultPassword = "Admin@123";
     if (existingAdminByEmail) {
-        // If admin exists but is inactive, reactivate and reset password
-        if (existingAdminByEmail.role === user_1.UserRole.ADMIN && !existingAdminByEmail.isActive) {
-            existingAdminByEmail.password = defaultPassword;
-            existingAdminByEmail.isActive = true;
-            existingAdminByEmail.emailVerified = true;
-            await existingAdminByEmail.save();
+        // If admin exists with the correct email
+        if (existingAdminByEmail.role === user_1.UserRole.ADMIN) {
+            // Reset password and ensure account is active (use update() to trigger password hashing hook)
+            await existingAdminByEmail.update({
+                password: defaultPassword,
+                isActive: true,
+                emailVerified: true,
+            });
             admin = existingAdminByEmail;
         }
         else {
-            throw new error_1.ConflictError(`Email ${defaultEmail} is already in use by another account.`);
+            throw new error_1.ConflictError(`Email ${defaultEmail} is already in use by a non-admin account.`);
         }
     }
     else {
-        // Create new default admin account
-        admin = await (0, exports.createUserData)({
-            firstName: "Admin",
-            lastName: "User",
-            email: defaultEmail,
-            password: defaultPassword,
-            phone: "0000000000",
-            role: user_1.UserRole.ADMIN,
-            gender: user_1.Gender.MALE,
-            age: 30,
+        // Check if any active admin exists (different email)
+        const existingActiveAdmin = await user_1.default.findOne({
+            where: {
+                role: user_1.UserRole.ADMIN,
+                isActive: true,
+            },
         });
-        // Activate immediately
-        await admin.update({ isActive: true, emailVerified: true });
+        if (existingActiveAdmin) {
+            // An active admin exists but with different email - create new one anyway
+            // This allows multiple admin accounts
+            admin = await (0, exports.createUserData)({
+                firstName: "Admin",
+                lastName: "User",
+                email: defaultEmail,
+                password: defaultPassword,
+                phone: "0000000000",
+                role: user_1.UserRole.ADMIN,
+                gender: user_1.Gender.MALE,
+                age: 30,
+            });
+            // Activate immediately
+            await admin.update({ isActive: true, emailVerified: true });
+        }
+        else {
+            // No admin exists - create new default admin account
+            admin = await (0, exports.createUserData)({
+                firstName: "Admin",
+                lastName: "User",
+                email: defaultEmail,
+                password: defaultPassword,
+                phone: "0000000000",
+                role: user_1.UserRole.ADMIN,
+                gender: user_1.Gender.MALE,
+                age: 30,
+            });
+            // Activate immediately
+            await admin.update({ isActive: true, emailVerified: true });
+        }
     }
     return {
         user: admin,
