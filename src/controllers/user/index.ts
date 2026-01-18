@@ -774,16 +774,8 @@ export const toggleUserStatusController = async (
   });
 };
 
-// Seed admin account (development only)
+// Seed admin account
 export const seedAdminController = async (req: Request, res: Response) => {
-  // Only allow in development or if explicitly enabled
-  if (
-    process.env.NODE_ENV === "production" &&
-    process.env.ENABLE_ADMIN_SEEDER !== "true"
-  ) {
-    throw new ForbiddenError("Seeder is only available in development.");
-  }
-
   const result = await seedAdminData();
 
   res.status(StatusCodes.CREATED).json({
