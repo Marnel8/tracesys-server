@@ -306,8 +306,9 @@ const calculateTimeBoundaries = (agency: Agency | null) => {
   // Morning clock-in cutoff: Use lunch start time if available, otherwise calculate from opening time
   // If lunch starts at 12:00 PM, morning clock-in closes at 11:59 AM (1 minute before lunch)
   // If no lunch time, use 2 hours after opening (e.g., 8:00 AM -> 10:00 AM cutoff)
+  // Prevent negative morningCutoff when lunchStart = 0 (midnight)
   let morningCutoff: number;
-  if (lunchStart !== null) {
+  if (lunchStart !== null && lunchStart > 0) {
     // Morning closes 1 minute before lunch starts (inclusive: <= lunchStart - 1)
     morningCutoff = lunchStart - 1;
   } else if (opening !== null) {
@@ -316,6 +317,11 @@ const calculateTimeBoundaries = (agency: Agency | null) => {
   } else {
     // Fallback: 10:59 AM if no operating hours set
     morningCutoff = 10 * 60 + 59;
+  }
+
+  // Ensure morningCutoff is never negative
+  if (morningCutoff < 0) {
+    morningCutoff = opening !== null ? opening + (2 * 60) : 10 * 60 + 59;
   }
 
   // Morning boundary: 1 minute after cutoff (exclusive boundary)
