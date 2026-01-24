@@ -259,9 +259,8 @@ const calculateTimeBoundaries = (agency) => {
     // Morning clock-in cutoff: Use lunch start time if available, otherwise calculate from opening time
     // If lunch starts at 12:00 PM, morning clock-in closes at 11:59 AM (1 minute before lunch)
     // If no lunch time, use 2 hours after opening (e.g., 8:00 AM -> 10:00 AM cutoff)
-    // Prevent negative morningCutoff when lunchStart = 0 (midnight)
     let morningCutoff;
-    if (lunchStart !== null && lunchStart > 0) {
+    if (lunchStart !== null) {
         // Morning closes 1 minute before lunch starts (inclusive: <= lunchStart - 1)
         morningCutoff = lunchStart - 1;
     }
@@ -272,10 +271,6 @@ const calculateTimeBoundaries = (agency) => {
     else {
         // Fallback: 10:59 AM if no operating hours set
         morningCutoff = 10 * 60 + 59;
-    }
-    // Ensure morningCutoff is never negative
-    if (morningCutoff < 0) {
-        morningCutoff = opening !== null ? opening + (2 * 60) : 10 * 60 + 59;
     }
     // Morning boundary: 1 minute after cutoff (exclusive boundary)
     const morningBoundary = morningCutoff + 1;
@@ -361,18 +356,10 @@ const determineSessionType = (agency, currentTime, existingRecord) => {
             return "afternoon";
         }
     }
-    // If morning exists and is complete, determine based on time
+    // If morning exists and is complete, only afternoon is available
     if (morningComplete) {
-        // Morning is done, check if we should allow afternoon
-        const lunchStart = parseTimeToMinutes(agency?.lunchStartTime);
-        if (lunchStart !== null) {
-            // Use lunch start as divider (exclusive: < lunchStart = morning, >= lunchStart = afternoon)
-            return currentTimeMinutes < lunchStart ? "morning" : "afternoon";
-        }
-        else {
-            // No lunch time, use morning boundary as divider (exclusive)
-            return currentTimeMinutes < boundaries.morningBoundary ? "morning" : "afternoon";
-        }
+        // Morning is complete, so only afternoon is available (regardless of time)
+        return "afternoon";
     }
     // If morning exists but not complete, this shouldn't happen (should be caught by in-progress check)
     // But fallback: determine based on time
