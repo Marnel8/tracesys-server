@@ -94,6 +94,16 @@ const upsertPracticumController = async (req, res) => {
             throw new error_1.BadRequestError("Student must be enrolled in a section before creating a practicum");
         }
         const course = enrollment.section.course;
+        // Get instructor's OJT hours as default
+        let defaultOjtHours = 400;
+        if (enrollment.section.instructorId) {
+            const instructor = await user_1.default.findByPk(enrollment.section.instructorId, {
+                transaction,
+            });
+            if (instructor && instructor.ojtHours) {
+                defaultOjtHours = instructor.ojtHours;
+            }
+        }
         const existingPracticum = await practicum_1.default.findOne({
             where: { studentId },
             transaction,
@@ -107,7 +117,7 @@ const upsertPracticumController = async (req, res) => {
             position,
             startDate: new Date(startDate),
             endDate: new Date(endDate),
-            totalHours: Number(totalHours) || 400,
+            totalHours: Number(totalHours) || defaultOjtHours,
             workSetup,
             status: "active",
             supervisorId: supervisorId || null, // Allow null to remove supervisor

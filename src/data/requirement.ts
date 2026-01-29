@@ -7,6 +7,8 @@ import StudentEnrollment from "@/db/models/student-enrollment";
 import Section from "@/db/models/section";
 import Practicum from "@/db/models/practicum";
 import Agency from "@/db/models/agency";
+import { instructorOwnsStudent } from "@/utils/instructor";
+import { UnauthorizedError } from "@/utils/error";
 
 export type RequirementStatus =
 	| "pending"
@@ -31,6 +33,7 @@ interface GetRequirementsParams {
 	studentId?: string;
 	practicumId?: string;
 	instructorId?: string;
+	authUser?: any; // Authenticated user for access control
 }
 
 export const createRequirementFromTemplateData = async (
@@ -57,8 +60,48 @@ export const createRequirementFromTemplateData = async (
 	return requirement;
 };
 
+/**
+ * Check if authenticated user has access to a health requirement
+ * - Students: Can only access their own health requirements
+ * - Instructors: Can only access health requirements for students in their sections
+ * - Admins: Can access all health requirements
+ */
+export const checkHealthRequirementAccess = async (
+	requirement: Requirement,
+	authUser: any
+): Promise<boolean> => {
+	if (!authUser) return false;
+
+	const category = (requirement.category || "").toLowerCase();
+	if (category !== "health") {
+		// Non-health requirements are not restricted
+		return true;
+	}
+
+	const userRole = authUser.role?.toLowerCase();
+	const userId = authUser.id;
+
+	// Admins can access all health requirements
+	if (userRole === "admin") {
+		return true;
+	}
+
+	// Students can only access their own health requirements
+	if (userRole === "student") {
+		return requirement.studentId === userId;
+	}
+
+	// Instructors can only access health requirements for students in their sections
+	if (userRole === "instructor") {
+		return await instructorOwnsStudent(userId, requirement.studentId);
+	}
+
+	// Default: deny access
+	return false;
+};
+
 export const getRequirementsData = async (params: GetRequirementsParams) => {
-	const { page, limit, search, status, studentId, practicumId, instructorId } = params;
+	const { page, limit, search, status, studentId, practicumId, instructorId, authUser } = params;
 	const offset = (page - 1) * limit;
 
 	const where: any = {};
@@ -110,6 +153,29 @@ export const getRequirementsData = async (params: GetRequirementsParams) => {
 		where.practicumId = practicumId;
 	}
 	
+	// Apply health requirement access control at query level
+	if (authUser) {
+		const userRole = authUser.role?.toLowerCase();
+		const userId = authUser.id;
+
+		if (userRole === "student") {
+			// Students: Can only see health requirements where they are the student
+			andConditions.push({
+				[Op.or]: [
+					{ category: { [Op.ne]: "health" } }, // Non-health requirements
+					{ studentId: userId }, // Or their own health requirements
+				],
+			});
+		} else if (userRole === "instructor") {
+			// Instructors: Can only see health requirements for their students
+			// We'll need to filter this after fetching student IDs, but add a base condition
+			// For now, we'll handle this in post-processing for instructors
+			// The instructorId filter already ensures they only see their students' requirements
+			// So we just need to ensure health requirements are included only for their students
+		}
+		// Admins: No additional filtering needed - they can see all
+	}
+
 	// Combine all AND conditions
 	if (andConditions.length > 0) {
 		where[Op.and] = andConditions;
@@ -296,18 +362,47 @@ export const getRequirementsData = async (params: GetRequirementsParams) => {
 		],
 	});
 
+	// Filter health requirements based on access control (post-processing for instructors)
+	// This is needed because instructor-student relationships require checking enrollments
+	let filteredRows = rows;
+	let filteredCount = count;
+	if (authUser) {
+		const userRole = authUser.role?.toLowerCase();
+		
+		// For instructors, we need to verify each health requirement belongs to their students
+		if (userRole === "instructor" && instructorId === authUser.id) {
+			const accessChecks = await Promise.all(
+				rows.map(async (req) => {
+					const category = (req.category || "").toLowerCase();
+					if (category === "health") {
+						// Verify this health requirement is for a student in instructor's sections
+						return await checkHealthRequirementAccess(req, authUser);
+					}
+					return true; // Non-health requirements are already filtered by instructorId
+				})
+			);
+			filteredRows = rows.filter((_, index) => accessChecks[index]);
+			// Note: Count adjustment would require a separate query, so we use filteredRows.length
+			// This may cause slight pagination inconsistencies, but is acceptable for security
+			filteredCount = filteredRows.length;
+		} else {
+			// For students and admins, filtering is already done in WHERE clause
+			filteredRows = rows;
+		}
+	}
+
 	return {
-		requirements: rows,
+		requirements: filteredRows,
 		pagination: {
 			currentPage: page,
-			totalPages: Math.ceil(count / limit),
-			totalItems: count,
+			totalPages: Math.ceil(filteredCount / limit),
+			totalItems: filteredCount,
 			itemsPerPage: limit,
 		},
 	};
 };
 
-export const findRequirementByID = async (id: string) => {
+export const findRequirementByID = async (id: string, authUser?: any) => {
 	const req = await Requirement.findByPk(id, {
 		include: [
 			{ model: RequirementTemplate, as: "template" as any },
@@ -323,6 +418,21 @@ export const findRequirementByID = async (id: string) => {
 			},
 		],
 	});
+
+	if (!req) {
+		return null;
+	}
+
+	// Check access for health requirements
+	if (authUser) {
+		const hasAccess = await checkHealthRequirementAccess(req, authUser);
+		if (!hasAccess) {
+			throw new UnauthorizedError(
+				"You do not have permission to access this health-related requirement"
+			);
+		}
+	}
+
 	return req;
 };
 
@@ -526,13 +636,35 @@ export const getArchivedRequirementsData = async (params: {
 	page: number;
 	limit: number;
 	search: string;
+	authUser?: any; // Authenticated user for access control
 }) => {
-	const { page, limit, search } = params;
+	const { page, limit, search, authUser } = params;
 	const offset = (page - 1) * limit;
 
 	const whereClause: any = {
 		isActive: false, // Only include archived (inactive) requirements
 	};
+
+	// Apply health requirement access control
+	if (authUser) {
+		const userRole = authUser.role?.toLowerCase();
+		const userId = authUser.id;
+
+		if (userRole === "student") {
+			// Students: Can only see their own archived health requirements
+			whereClause[Op.and] = [
+				...(whereClause[Op.and] || []),
+				{
+					[Op.or]: [
+						{ category: { [Op.ne]: "health" } },
+						{ studentId: userId },
+					],
+				},
+			];
+		}
+		// Instructors and admins: No additional filtering at query level
+		// Will be filtered post-query for instructors
+	}
 
 	if (search) {
 		whereClause[Op.or] = [
@@ -565,14 +697,35 @@ export const getArchivedRequirementsData = async (params: {
 		order: [["updatedAt", "DESC"]], // Order by updatedAt (deletion time)
 	});
 
+	// Filter health requirements for instructors
+	let filteredRequirements = requirements;
+	let filteredCount = count;
+	if (authUser) {
+		const userRole = authUser.role?.toLowerCase();
+		
+		if (userRole === "instructor") {
+			const accessChecks = await Promise.all(
+				requirements.map(async (req) => {
+					const category = (req.category || "").toLowerCase();
+					if (category === "health") {
+						return await checkHealthRequirementAccess(req, authUser);
+					}
+					return true; // Non-health requirements are accessible
+				})
+			);
+			filteredRequirements = requirements.filter((_, index) => accessChecks[index]);
+			filteredCount = filteredRequirements.length;
+		}
+	}
+
 	// Look up who deleted each requirement from audit logs (if available)
-	const requirementIds = requirements.map((r) => r.id);
+	const requirementIds = filteredRequirements.map((r) => r.id);
 	let deletedByMap: Record<string, string> = {};
 
 	// Note: Audit logging for requirement deletion would need to be implemented
 	// For now, we'll use instructor info if available, or "Unknown"
 
-	for (const req of requirements) {
+	for (const req of filteredRequirements) {
 		const reqData = req.toJSON() as any;
 		if (reqData.instructor) {
 			const instructor = reqData.instructor;
@@ -583,7 +736,7 @@ export const getArchivedRequirementsData = async (params: {
 	}
 
 	// Transform to archive format
-	const items = requirements.map((requirement) => {
+	const items = filteredRequirements.map((requirement) => {
 		const reqData = requirement.toJSON() as any;
 		return {
 			id: requirement.id,
@@ -604,8 +757,8 @@ export const getArchivedRequirementsData = async (params: {
 		items,
 		pagination: {
 			currentPage: page,
-			totalPages: Math.ceil(count / limit),
-			totalItems: count,
+			totalPages: Math.ceil(filteredCount / limit),
+			totalItems: filteredCount,
 			itemsPerPage: limit,
 		},
 	};

@@ -28,6 +28,8 @@ import {
 } from "@/data/user";
 import StudentEnrollment from "@/db/models/student-enrollment";
 import Section from "@/db/models/section";
+import Agency from "@/db/models/agency";
+import { logAuditEvent } from "@/middlewares/audit";
 import Requirement from "@/db/models/requirement";
 import { Op } from "sequelize";
 import {
@@ -512,6 +514,7 @@ export const editUserController = async (req: Request, res: Response) => {
     program,
     specialization,
     yearLevel,
+    ojtHours,
   } = req.body;
 
   if (!id) {
@@ -540,6 +543,7 @@ export const editUserController = async (req: Request, res: Response) => {
     ...(program !== undefined && { program }),
     ...(specialization !== undefined && { specialization }),
     ...(yearLevel !== undefined && { yearLevel }),
+    ...(ojtHours !== undefined && { ojtHours }),
     ...(avatar && { avatar }),
   };
 
@@ -736,7 +740,40 @@ export const deleteUserController = async (req: Request, res: Response) => {
     throw new BadRequestError("You cannot delete your own account.");
   }
 
+  // Get user details to check role
+  const user = await findUserByID(id);
+  if (!user) {
+    throw new NotFoundError("User not found.");
+  }
+
+  // Get agencies that will be affected (if user is an instructor)
+  const affectedAgencies = user.role === UserRole.INSTRUCTOR 
+    ? await Agency.findAll({ 
+        where: { instructorId: id },
+        attributes: ["id", "name"]
+      })
+    : [];
+
   await deleteUserData(id);
+
+  // Log audit events for each affected agency
+  for (const agency of affectedAgencies) {
+    await logAuditEvent(req, {
+      action: "Agency Updated",
+      resource: "Agency Management",
+      resourceId: agency.id,
+      details: `Agency instructorId cleared due to user deletion: ${agency.name}`,
+      category: "user_management",
+      severity: "medium",
+      metadata: {
+        agencyName: agency.name,
+        agencyId: agency.id,
+        updatedDuring: "user_deletion",
+        deletedUserId: id,
+        deletedUserName: `${user.firstName} ${user.lastName}`,
+      },
+    });
+  }
 
   res.status(StatusCodes.OK).json({
     success: true,

@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.hardDeleteRequirementController = exports.archiveRequirementController = exports.restoreRequirementController = exports.getArchivedRequirementsController = exports.updateRequirementDueDateController = exports.getStudentRequirementCommentsController = exports.getRequirementCommentsController = exports.createRequirementCommentController = exports.getRequirementStatsController = exports.rejectRequirementController = exports.approveRequirementController = exports.submitRequirementController = exports.getRequirementController = exports.getInstructorRequirementsController = exports.getRequirementsController = exports.createRequirementFromTemplateController = void 0;
+exports.downloadRequirementFileController = exports.hardDeleteRequirementController = exports.archiveRequirementController = exports.restoreRequirementController = exports.getArchivedRequirementsController = exports.updateRequirementDueDateController = exports.getStudentRequirementCommentsController = exports.getRequirementCommentsController = exports.createRequirementCommentController = exports.getRequirementStatsController = exports.rejectRequirementController = exports.approveRequirementController = exports.submitRequirementController = exports.getRequirementController = exports.getInstructorRequirementsController = exports.getRequirementsController = exports.createRequirementFromTemplateController = void 0;
 const path_1 = __importDefault(require("path"));
 const http_status_codes_1 = require("http-status-codes");
 const error_1 = require("../../utils/error.js");
@@ -12,6 +12,7 @@ const requirement_template_1 = __importDefault(require("../../db/models/requirem
 const file_attachment_1 = __importDefault(require("../../db/models/file-attachment.js"));
 const requirement_2 = require("../../data/requirement.js");
 const audit_logger_1 = require("../../utils/audit-logger.js");
+const fs_1 = __importDefault(require("fs"));
 const createRequirementFromTemplateController = async (req, res) => {
     const { templateId, studentId, practicumId = null, dueDate = null } = req.body;
     if (!templateId || !studentId) {
@@ -54,6 +55,7 @@ const getRequirementsController = async (req, res) => {
         practicumId: practicumId || undefined,
         instructorId,
         includePending: includePending === "true" || includePending === true,
+        authUser: authUser,
     });
     res.status(http_status_codes_1.StatusCodes.OK).json({ success: true, message: "Requirements retrieved", data: result });
 };
@@ -68,6 +70,7 @@ const getInstructorRequirementsController = async (req, res) => {
         studentId: studentId || undefined,
         practicumId: practicumId || undefined,
         instructorId: req.user?.id,
+        authUser: req.user,
     });
     res
         .status(http_status_codes_1.StatusCodes.OK)
@@ -78,7 +81,7 @@ const getRequirementController = async (req, res) => {
     const { id } = req.params;
     if (!id)
         throw new error_1.BadRequestError("Requirement ID is required");
-    const requirement = await (0, requirement_2.findRequirementByID)(id);
+    const requirement = await (0, requirement_2.findRequirementByID)(id, req.user);
     if (!requirement)
         throw new error_1.NotFoundError("Requirement not found");
     res.status(http_status_codes_1.StatusCodes.OK).json({ success: true, data: requirement });
@@ -308,6 +311,7 @@ const getArchivedRequirementsController = async (req, res) => {
         page: Number(page),
         limit: Number(limit),
         search: search,
+        authUser: req.user,
     });
     res.status(http_status_codes_1.StatusCodes.OK).json({
         success: true,
@@ -368,3 +372,44 @@ const hardDeleteRequirementController = async (req, res) => {
     }
 };
 exports.hardDeleteRequirementController = hardDeleteRequirementController;
+/**
+ * Protected file download endpoint for requirement files
+ * Checks access permissions before serving health-related requirement files
+ */
+const downloadRequirementFileController = async (req, res) => {
+    const { id } = req.params;
+    if (!id)
+        throw new error_1.BadRequestError("Requirement ID is required");
+    const authUser = req.user;
+    if (!authUser)
+        throw new error_1.UnauthorizedError("Authentication required");
+    // Fetch requirement with access check
+    const requirement = await (0, requirement_2.findRequirementByID)(id, authUser);
+    if (!requirement)
+        throw new error_1.NotFoundError("Requirement not found");
+    if (!requirement.fileUrl) {
+        throw new error_1.NotFoundError("File not found for this requirement");
+    }
+    // Resolve file path
+    const projectRoot = process.cwd();
+    const candidateUploads = [
+        path_1.default.join(projectRoot, "uploads"),
+        path_1.default.join(projectRoot, "src", "uploads"),
+        path_1.default.join(projectRoot, "dist", "uploads"),
+    ];
+    const uploadsDir = candidateUploads.find((p) => fs_1.default.existsSync(p)) || candidateUploads[0];
+    // Extract filename from fileUrl (format: /uploads/filename.ext)
+    const fileName = requirement.fileUrl.replace("/uploads/", "");
+    const filePath = path_1.default.join(uploadsDir, fileName);
+    // Check if file exists
+    if (!fs_1.default.existsSync(filePath)) {
+        throw new error_1.NotFoundError("File not found on server");
+    }
+    // Set headers for file download
+    res.setHeader("Content-Disposition", `attachment; filename="${requirement.fileName || fileName}"`);
+    res.setHeader("Content-Type", "application/octet-stream");
+    // Stream the file
+    const fileStream = fs_1.default.createReadStream(filePath);
+    fileStream.pipe(res);
+};
+exports.downloadRequirementFileController = downloadRequirementFileController;

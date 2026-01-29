@@ -24,6 +24,7 @@ import {
 	archiveRequirementData,
 } from "@/data/requirement";
 import { logStudentAction } from "@/utils/audit-logger";
+import fs from "fs";
 
 export const createRequirementFromTemplateController = async (
 	req: Request,
@@ -70,6 +71,7 @@ export const getRequirementsController = async (req: Request, res: Response) => 
 		practicumId: practicumId || undefined,
 		instructorId,
 		includePending: includePending === "true" || includePending === true,
+		authUser: authUser,
 	} as any);
 	res.status(StatusCodes.OK).json({ success: true, message: "Requirements retrieved", data: result });
 };
@@ -85,6 +87,7 @@ export const getInstructorRequirementsController = async (req: Request, res: Res
 		studentId: studentId || undefined,
 		practicumId: practicumId || undefined,
 		instructorId: req.user?.id,
+		authUser: req.user,
 	});
 	res
 		.status(StatusCodes.OK)
@@ -94,7 +97,7 @@ export const getInstructorRequirementsController = async (req: Request, res: Res
 export const getRequirementController = async (req: Request, res: Response) => {
 	const { id } = req.params;
 	if (!id) throw new BadRequestError("Requirement ID is required");
-	const requirement = await findRequirementByID(id);
+	const requirement = await findRequirementByID(id, req.user);
 	if (!requirement) throw new NotFoundError("Requirement not found");
 	res.status(StatusCodes.OK).json({ success: true, data: requirement });
 };
@@ -332,6 +335,7 @@ export const getArchivedRequirementsController = async (req: Request, res: Respo
 		page: Number(page),
 		limit: Number(limit),
 		search: search as string,
+		authUser: req.user,
 	});
 
 	res.status(StatusCodes.OK).json({
@@ -398,5 +402,52 @@ export const hardDeleteRequirementController = async (req: Request, res: Respons
 			message: error.message || "Failed to permanently delete requirement",
 		});
 	}
+};
+
+/**
+ * Protected file download endpoint for requirement files
+ * Checks access permissions before serving health-related requirement files
+ */
+export const downloadRequirementFileController = async (req: Request, res: Response) => {
+	const { id } = req.params;
+	if (!id) throw new BadRequestError("Requirement ID is required");
+
+	const authUser = req.user as any;
+	if (!authUser) throw new UnauthorizedError("Authentication required");
+
+	// Fetch requirement with access check
+	const requirement = await findRequirementByID(id, authUser);
+	if (!requirement) throw new NotFoundError("Requirement not found");
+
+	if (!requirement.fileUrl) {
+		throw new NotFoundError("File not found for this requirement");
+	}
+
+	// Resolve file path
+	const projectRoot = process.cwd();
+	const candidateUploads = [
+		path.join(projectRoot, "uploads"),
+		path.join(projectRoot, "src", "uploads"),
+		path.join(projectRoot, "dist", "uploads"),
+	];
+	const uploadsDir =
+		candidateUploads.find((p) => fs.existsSync(p)) || candidateUploads[0];
+
+	// Extract filename from fileUrl (format: /uploads/filename.ext)
+	const fileName = requirement.fileUrl.replace("/uploads/", "");
+	const filePath = path.join(uploadsDir, fileName);
+
+	// Check if file exists
+	if (!fs.existsSync(filePath)) {
+		throw new NotFoundError("File not found on server");
+	}
+
+	// Set headers for file download
+	res.setHeader("Content-Disposition", `attachment; filename="${requirement.fileName || fileName}"`);
+	res.setHeader("Content-Type", "application/octet-stream");
+
+	// Stream the file
+	const fileStream = fs.createReadStream(filePath);
+	fileStream.pipe(res);
 };
 

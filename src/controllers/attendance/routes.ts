@@ -10,6 +10,8 @@ import {
 	getStudentAttendanceController,
 	getAttendanceStatsController,
 	getTodayAttendanceController,
+	approveAttendanceController,
+	rejectAttendanceController,
 } from ".";
 
 const router = Router();
@@ -48,6 +50,22 @@ router.post(
 
 // Get a single attendance record (must come after specific routes)
 router.get("/attendance/:id", isAuthenticated, getAttendanceController);
+
+// Approve attendance (instructor)
+router.put(
+	"/attendance/:id/approve",
+	isAuthenticated,
+	authorizeRoles("instructor"),
+	approveAttendanceController
+);
+
+// Reject attendance (instructor)
+router.put(
+	"/attendance/:id/reject",
+	isAuthenticated,
+	authorizeRoles("instructor"),
+	rejectAttendanceController
+);
 
 export default router;
 

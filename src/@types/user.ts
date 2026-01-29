@@ -33,6 +33,7 @@ export type CreateUserParams = {
 	program?: string;
 	specialization?: string;
 	yearLevel?: string;
+	ojtHours?: number;
 };
 
 export type FindUserParams = {

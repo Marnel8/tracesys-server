@@ -88,6 +88,10 @@ __decorate([
     __metadata("design:type", Number)
 ], AttendanceRecord.prototype, "hours", void 0);
 __decorate([
+    (0, sequelize_typescript_1.Column)({ type: sequelize_typescript_1.DataType.FLOAT, allowNull: true }),
+    __metadata("design:type", Number)
+], AttendanceRecord.prototype, "undertimeHours", void 0);
+__decorate([
     (0, sequelize_typescript_1.Column)({
         type: sequelize_typescript_1.DataType.ENUM("present", "absent", "late", "excused"),
         allowNull: false,

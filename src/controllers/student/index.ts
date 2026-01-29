@@ -10,6 +10,8 @@ import { uploadUserAvatar } from "@/utils/image-handler";
 import path from "path";
 import fs from "fs";
 import sendMail from "@/utils/send-mail";
+import Agency from "@/db/models/agency";
+import { logAuditEvent } from "@/middlewares/audit";
 
 // Student registration data interface
 interface StudentRegistrationData {
@@ -105,7 +107,44 @@ export const createStudentController = async (req: Request, res: Response) => {
 		sendCredentials,
 	};
 
+	// Check if agency exists before creation (to detect if it was created during student registration)
+	const agencyExistedBefore = agency ? await Agency.findOne({ where: { name: agency } }) : null;
+
 	const result = await createStudentData(studentData);
+
+	// Check if agency was created during student registration
+	if (agency && !agencyExistedBefore) {
+		// Agency was likely created, verify by checking if it exists now and was created recently
+		const createdAgency = await Agency.findOne({ 
+			where: { name: agency },
+			order: [["createdAt", "DESC"]]
+		});
+
+		if (createdAgency) {
+			// Check if agency was created within the last 5 seconds (safety check)
+			const createdAt = new Date(createdAgency.createdAt);
+			const now = new Date();
+			const secondsDiff = (now.getTime() - createdAt.getTime()) / 1000;
+
+			if (secondsDiff < 5) {
+				// Log audit event for agency creation
+				await logAuditEvent(req, {
+					action: "Agency Created",
+					resource: "Agency Management",
+					resourceId: createdAgency.id,
+					details: `Agency auto-created during student registration: ${createdAgency.name}`,
+					category: "user_management",
+					severity: "medium",
+					metadata: {
+						agencyName: createdAgency.name,
+						agencyId: createdAgency.id,
+						createdDuring: "student_registration",
+						studentId: result.user.studentId,
+					},
+				});
+			}
+		}
+	}
 
 	// Send credentials email if requested
 	if (sendCredentials) {

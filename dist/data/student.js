@@ -302,6 +302,16 @@ const createStudentData = async (studentData) => {
                     isActive: true,
                 }, { transaction: t });
             }
+            // Get instructor's OJT hours as default
+            let defaultOjtHours = 400;
+            if (sectionRecord.instructorId) {
+                const instructor = await user_1.default.findByPk(sectionRecord.instructorId, {
+                    transaction: t,
+                });
+                if (instructor && instructor.ojtHours) {
+                    defaultOjtHours = instructor.ojtHours;
+                }
+            }
             // Create practicum
             practicum = await practicum_1.default.create({
                 studentId: user.id,
@@ -313,7 +323,7 @@ const createStudentData = async (studentData) => {
                 position: "Student Intern",
                 startDate: new Date(studentData.startDate),
                 endDate: new Date(studentData.endDate),
-                totalHours: 400,
+                totalHours: defaultOjtHours,
                 completedHours: 0,
                 workSetup: "On-site",
                 status: "active",
@@ -769,16 +779,32 @@ const updateStudentData = async (id, studentData) => {
                         (enrollment && enrollment.sectionId) || null;
                 }
                 // Derive course/department from section if missing
+                let sectionRecord = null;
                 if (sectionIdToUse && (!courseIdToUse || !departmentIdToUse)) {
-                    const section = await section_1.default.findByPk(sectionIdToUse, {
+                    sectionRecord = await section_1.default.findByPk(sectionIdToUse, {
                         include: [{ model: course_1.default, as: "course" }],
                         transaction: t,
                     });
-                    if (section && section.course) {
+                    if (sectionRecord && sectionRecord.course) {
                         if (!courseIdToUse)
-                            courseIdToUse = section.course.id;
+                            courseIdToUse = sectionRecord.course.id;
                         if (!departmentIdToUse)
-                            departmentIdToUse = section.course.departmentId;
+                            departmentIdToUse = sectionRecord.course.departmentId;
+                    }
+                }
+                else if (sectionIdToUse) {
+                    sectionRecord = await section_1.default.findByPk(sectionIdToUse, {
+                        transaction: t,
+                    });
+                }
+                // Get instructor's OJT hours as default
+                let defaultOjtHours = studentData.totalHours ?? 400;
+                if (sectionRecord && sectionRecord.instructorId) {
+                    const instructor = await user_1.default.findByPk(sectionRecord.instructorId, {
+                        transaction: t,
+                    });
+                    if (instructor && instructor.ojtHours) {
+                        defaultOjtHours = studentData.totalHours ?? instructor.ojtHours;
                     }
                 }
                 await practicum_1.default.create({
@@ -795,7 +821,7 @@ const updateStudentData = async (id, studentData) => {
                     endDate: studentData.endDate
                         ? new Date(studentData.endDate)
                         : undefined,
-                    totalHours: studentData.totalHours ?? 400,
+                    totalHours: defaultOjtHours,
                     completedHours: 0,
                     workSetup: studentData.workSetup || "On-site",
                     status: "active",
@@ -921,6 +947,7 @@ const getStudentsByTeacherData = async (params) => {
                         {
                             model: attendance_record_1.default,
                             as: "attendanceRecords",
+                            required: false,
                         },
                     ],
                 },

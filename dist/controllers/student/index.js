@@ -10,6 +10,8 @@ const student_1 = require("../../data/student.js");
 const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs"));
 const send_mail_1 = __importDefault(require("../../utils/send-mail.js"));
+const agency_1 = __importDefault(require("../../db/models/agency.js"));
+const audit_1 = require("../../middlewares/audit.js");
 const createStudentController = async (req, res) => {
     const { firstName, lastName, middleName, email, phone, age, gender, studentId, department, course, section, year, semester, agency, agencyAddress, supervisor, supervisorEmail, supervisorPhone, startDate, endDate, password, sendCredentials = true, } = req.body;
     if (!firstName || !lastName || !email || !phone || !age || !gender || !studentId || !password) {
@@ -43,7 +45,40 @@ const createStudentController = async (req, res) => {
         ...(endDate && { endDate }),
         sendCredentials,
     };
+    // Check if agency exists before creation (to detect if it was created during student registration)
+    const agencyExistedBefore = agency ? await agency_1.default.findOne({ where: { name: agency } }) : null;
     const result = await (0, student_1.createStudentData)(studentData);
+    // Check if agency was created during student registration
+    if (agency && !agencyExistedBefore) {
+        // Agency was likely created, verify by checking if it exists now and was created recently
+        const createdAgency = await agency_1.default.findOne({
+            where: { name: agency },
+            order: [["createdAt", "DESC"]]
+        });
+        if (createdAgency) {
+            // Check if agency was created within the last 5 seconds (safety check)
+            const createdAt = new Date(createdAgency.createdAt);
+            const now = new Date();
+            const secondsDiff = (now.getTime() - createdAt.getTime()) / 1000;
+            if (secondsDiff < 5) {
+                // Log audit event for agency creation
+                await (0, audit_1.logAuditEvent)(req, {
+                    action: "Agency Created",
+                    resource: "Agency Management",
+                    resourceId: createdAgency.id,
+                    details: `Agency auto-created during student registration: ${createdAgency.name}`,
+                    category: "user_management",
+                    severity: "medium",
+                    metadata: {
+                        agencyName: createdAgency.name,
+                        agencyId: createdAgency.id,
+                        createdDuring: "student_registration",
+                        studentId: result.user.studentId,
+                    },
+                });
+            }
+        }
+    }
     // Send credentials email if requested
     if (sendCredentials) {
         await sendStudentCredentials(result.user, password);

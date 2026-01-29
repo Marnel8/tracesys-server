@@ -39,10 +39,7 @@ const getAgenciesData = async (params) => {
         const offset = (page - 1) * limit;
         // Build where clause
         const whereClause = {};
-        // Filter by instructorId if provided (each instructor should only see their own agencies)
-        if (instructorId) {
-            whereClause.instructorId = instructorId;
-        }
+        // Agencies are now shared - no instructor filtering
         if (search) {
             whereClause[sequelize_1.Op.or] = [
                 { name: { [sequelize_1.Op.like]: `%${search}%` } },
@@ -63,6 +60,11 @@ const getAgenciesData = async (params) => {
         if (branchType && branchType !== "all") {
             whereClause.branchType = branchType;
         }
+        // Build supervisor where clause with instructor filtering
+        const supervisorWhere = { isActive: true };
+        if (instructorId) {
+            supervisorWhere.createdByInstructorId = instructorId;
+        }
         const { count, rows: agencies } = await agency_1.default.findAndCountAll({
             where: whereClause,
             limit,
@@ -72,7 +74,7 @@ const getAgenciesData = async (params) => {
                 {
                     model: supervisor_1.default,
                     as: "supervisors",
-                    where: { isActive: true },
+                    where: supervisorWhere,
                     required: false,
                     attributes: ["id", "name", "email", "position", "isActive"],
                 },
@@ -109,14 +111,19 @@ const getAgenciesData = async (params) => {
     }
 };
 exports.getAgenciesData = getAgenciesData;
-const findAgencyByID = async (id) => {
+const findAgencyByID = async (id, instructorId) => {
     try {
+        // Build supervisor where clause with instructor filtering
+        const supervisorWhere = { isActive: true };
+        if (instructorId) {
+            supervisorWhere.createdByInstructorId = instructorId;
+        }
         const agency = await agency_1.default.findByPk(id, {
             include: [
                 {
                     model: supervisor_1.default,
                     as: "supervisors",
-                    where: { isActive: true },
+                    where: supervisorWhere,
                     required: false,
                     attributes: ["id", "name", "email", "phone", "position", "department", "isActive", "createdAt"],
                 },
@@ -367,7 +374,7 @@ const createSupervisorData = async (data) => {
 exports.createSupervisorData = createSupervisorData;
 const getSupervisorsData = async (params) => {
     try {
-        const { agencyId, page, limit, search, status } = params;
+        const { agencyId, page, limit, search, status, instructorId } = params;
         const offset = (page - 1) * limit;
         // Check if agency exists
         const agency = await agency_1.default.findByPk(agencyId);
@@ -377,6 +384,7 @@ const getSupervisorsData = async (params) => {
         // Build where clause
         const whereClause = {
             agencyId,
+            ...(instructorId && { createdByInstructorId: instructorId }),
         };
         if (search) {
             whereClause[sequelize_1.Op.or] = [
@@ -436,11 +444,15 @@ const findSupervisorByID = async (id) => {
     }
 };
 exports.findSupervisorByID = findSupervisorByID;
-const updateSupervisorData = async (id, updateData) => {
+const updateSupervisorData = async (id, updateData, instructorId) => {
     try {
         const supervisor = await supervisor_1.default.findByPk(id);
         if (!supervisor) {
             throw new Error("Supervisor not found");
+        }
+        // Check ownership: only the creator can edit their supervisor
+        if (instructorId && supervisor.createdByInstructorId && supervisor.createdByInstructorId !== instructorId) {
+            throw new Error("You can only edit supervisors you created");
         }
         // Check if email is being updated and if it conflicts with existing supervisor
         if (updateData.email && updateData.email !== supervisor.email) {
@@ -463,11 +475,15 @@ const updateSupervisorData = async (id, updateData) => {
     }
 };
 exports.updateSupervisorData = updateSupervisorData;
-const deleteSupervisorData = async (id) => {
+const deleteSupervisorData = async (id, instructorId) => {
     try {
         const supervisor = await supervisor_1.default.findByPk(id);
         if (!supervisor) {
             throw new Error("Supervisor not found");
+        }
+        // Check ownership: only the creator can delete their supervisor
+        if (instructorId && supervisor.createdByInstructorId && supervisor.createdByInstructorId !== instructorId) {
+            throw new Error("You can only delete supervisors you created");
         }
         // Check if supervisor has active practicums
         const activePracticums = await practicum_1.default.count({
@@ -487,23 +503,28 @@ const deleteSupervisorData = async (id) => {
     }
 };
 exports.deleteSupervisorData = deleteSupervisorData;
-const getAgencySupervisorStats = async (agencyId) => {
+const getAgencySupervisorStats = async (agencyId, instructorId) => {
     try {
         // Check if agency exists
         const agency = await agency_1.default.findByPk(agencyId);
         if (!agency) {
             throw new Error("Agency not found");
         }
+        // Build base where clause
+        const baseWhere = {
+            agencyId,
+            ...(instructorId && { createdByInstructorId: instructorId }),
+        };
         const totalSupervisors = await supervisor_1.default.count({
-            where: { agencyId },
+            where: baseWhere,
         });
         const activeSupervisors = await supervisor_1.default.count({
-            where: { agencyId, isActive: true },
+            where: { ...baseWhere, isActive: true },
         });
         const inactiveSupervisors = totalSupervisors - activeSupervisors;
         const supervisorsWithPracticums = await supervisor_1.default.count({
             where: {
-                agencyId,
+                ...baseWhere,
                 isActive: true,
             },
             include: [

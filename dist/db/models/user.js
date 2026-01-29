@@ -221,6 +221,10 @@ __decorate([
     __metadata("design:type", Boolean)
 ], User.prototype, "allowLoginWithoutRequirements", void 0);
 __decorate([
+    (0, sequelize_typescript_1.Column)({ type: sequelize_typescript_1.DataType.INTEGER, allowNull: true }),
+    __metadata("design:type", Number)
+], User.prototype, "ojtHours", void 0);
+__decorate([
     sequelize_typescript_1.CreatedAt,
     __metadata("design:type", Date)
 ], User.prototype, "createdAt", void 0);

@@ -133,43 +133,18 @@ export const createAgencyController = async (req: Request, res: Response) => {
 export const getAgenciesController = async (req: Request, res: Response) => {
 	const { page = 1, limit = 10, search = "", status = "all", branchType = "all" } = req.query;
 
-	const authUser = req.user as any;
-	const userId = authUser?.id;
-	const userRole = authUser?.role;
+	// Get the instructor ID from the authenticated user
+	const instructorId = (req.user as any)?.id;
 
-	let instructorId: string | undefined;
-
-	// If the user is a student, get their instructor from their enrollment
-	if (userRole === UserRole.STUDENT) {
-		const enrollment = await StudentEnrollment.findOne({
-			where: { studentId: userId },
-			include: [
-				{
-					model: Section,
-					as: "section" as any,
-					attributes: ["instructorId"],
-					required: true,
-				},
-			],
-		});
-
-		// Access the section through the enrollment
-		const section = (enrollment as any)?.section as Section | null | undefined;
-		if (section?.instructorId) {
-			instructorId = section.instructorId;
-		}
-	} else if (userRole === UserRole.INSTRUCTOR) {
-		// If the user is an instructor, use their own ID
-		instructorId = userId;
-	}
-
+	// Agencies are now shared - all instructors can see all agencies
+	// But supervisors are filtered by instructor
 	const result = await getAgenciesData({
 		page: Number(page),
 		limit: Number(limit),
 		search: search as string,
 		status: status as string,
 		branchType: branchType as string,
-		instructorId: instructorId, // Filter agencies by the instructor (either the authenticated instructor or the student's instructor)
+		instructorId,
 	});
 
 	res.status(StatusCodes.OK).json({
@@ -186,7 +161,10 @@ export const getAgencyController = async (req: Request, res: Response) => {
 		throw new BadRequestError("Agency ID is required");
 	}
 
-	const agency = await findAgencyByID(id);
+	// Get the instructor ID from the authenticated user
+	const instructorId = (req.user as any)?.id;
+
+	const agency = await findAgencyByID(id, instructorId);
 
 	if (!agency) {
 		throw new NotFoundError("Agency not found");
@@ -207,7 +185,10 @@ export const updateAgencyController = async (req: Request, res: Response) => {
 		throw new BadRequestError("Agency ID is required");
 	}
 
-	const agency = await findAgencyByID(id);
+	// Get the instructor ID from the authenticated user
+	const instructorId = (req.user as any)?.id;
+
+	const agency = await findAgencyByID(id, instructorId);
 
 	if (!agency) {
 		throw new NotFoundError("Agency not found");
@@ -244,7 +225,10 @@ export const deleteAgencyController = async (req: Request, res: Response) => {
 		throw new BadRequestError("Agency ID is required");
 	}
 
-	const agency = await findAgencyByID(id);
+	// Get the instructor ID from the authenticated user
+	const instructorId = (req.user as any)?.id;
+
+	const agency = await findAgencyByID(id, instructorId);
 
 	if (!agency) {
 		throw new NotFoundError("Agency not found");
@@ -296,6 +280,20 @@ export const restoreAgencyController = async (req: Request, res: Response) => {
 
 	const agency = await restoreAgencyData(id);
 
+	// Log audit event
+	await logAuditEvent(req, {
+		action: "Agency Restored",
+		resource: "Agency Management",
+		resourceId: id,
+		details: `Restored agency: ${agency.name}`,
+		category: "user_management",
+		severity: "medium",
+		metadata: {
+			agencyName: agency.name,
+			agencyId: id,
+		},
+	});
+
 	res.status(StatusCodes.OK).json({
 		success: true,
 		message: "Agency restored successfully",
@@ -311,7 +309,25 @@ export const hardDeleteAgencyController = async (req: Request, res: Response) =>
 			throw new BadRequestError("Agency ID is required.");
 		}
 
+		// Get agency details before deletion for audit logging
+		const agency = await findAgencyByID(id);
+		const agencyName = agency ? agency.name : "Unknown";
+
 		await hardDeleteAgencyData(id);
+
+		// Log audit event
+		await logAuditEvent(req, {
+			action: "Agency Hard Deleted",
+			resource: "Agency Management",
+			resourceId: id,
+			details: `Permanently deleted agency: ${agencyName}`,
+			category: "user_management",
+			severity: "high",
+			metadata: {
+				agencyName: agencyName,
+				agencyId: id,
+			},
+		});
 
 		res.status(StatusCodes.OK).json({
 			success: true,
@@ -342,6 +358,9 @@ export const createSupervisorController = async (req: Request, res: Response) =>
 		throw new BadRequestError("Please provide all necessary supervisor data.");
 	}
 
+	// Get the instructor ID from the authenticated user
+	const instructorId = (req.user as any)?.id;
+
 	const supervisorData = {
 		agencyId,
 		name,
@@ -350,6 +369,7 @@ export const createSupervisorController = async (req: Request, res: Response) =>
 		position,
 		department,
 		isActive,
+		createdByInstructorId: instructorId, // Track who created this supervisor
 	};
 
 	const result = await createSupervisorData(supervisorData);
@@ -369,12 +389,16 @@ export const getSupervisorsController = async (req: Request, res: Response) => {
 		throw new BadRequestError("Agency ID is required");
 	}
 
+	// Get the instructor ID from the authenticated user
+	const instructorId = (req.user as any)?.id;
+
 	const result = await getSupervisorsData({
 		agencyId,
 		page: Number(page),
 		limit: Number(limit),
 		search: search as string,
 		status: status as string,
+		instructorId,
 	});
 
 	res.status(StatusCodes.OK).json({
@@ -418,7 +442,10 @@ export const updateSupervisorController = async (req: Request, res: Response) =>
 		throw new NotFoundError("Supervisor not found");
 	}
 
-	const result = await updateSupervisorData(id, updateData);
+	// Get the instructor ID from the authenticated user for ownership check
+	const instructorId = (req.user as any)?.id;
+
+	const result = await updateSupervisorData(id, updateData, instructorId);
 
 	res.status(StatusCodes.OK).json({
 		success: true,
@@ -440,7 +467,10 @@ export const deleteSupervisorController = async (req: Request, res: Response) =>
 		throw new NotFoundError("Supervisor not found");
 	}
 
-	await deleteSupervisorData(id);
+	// Get the instructor ID from the authenticated user for ownership check
+	const instructorId = (req.user as any)?.id;
+
+	await deleteSupervisorData(id, instructorId);
 
 	res.status(StatusCodes.OK).json({
 		success: true,
@@ -455,7 +485,10 @@ export const getAgencySupervisorStatsController = async (req: Request, res: Resp
 		throw new BadRequestError("Agency ID is required");
 	}
 
-	const stats = await getAgencySupervisorStats(agencyId);
+	// Get the instructor ID from the authenticated user
+	const instructorId = (req.user as any)?.id;
+
+	const stats = await getAgencySupervisorStats(agencyId, instructorId);
 
 	res.status(StatusCodes.OK).json({
 		success: true,

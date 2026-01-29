@@ -8,9 +8,11 @@ import {
 	ForeignKey,
 	BelongsTo,
 	HasMany,
+	Index,
 } from "sequelize-typescript";
 import Agency from "./agency";
 import Practicum from "./practicum";
+import User from "./user";
 
 @Table({
 	tableName: "supervisors",
@@ -47,6 +49,11 @@ export default class Supervisor extends Model {
 	@Column({ type: DataType.BOOLEAN, defaultValue: true })
 	declare isActive: boolean;
 
+	@ForeignKey(() => User)
+	@Index({ name: "idx_supervisors_createdByInstructorId" })
+	@Column({ type: DataType.UUID, allowNull: true })
+	declare createdByInstructorId: string | null;
+
 	@CreatedAt
 	declare createdAt: Date;
 
@@ -55,6 +62,9 @@ export default class Supervisor extends Model {
 
 	@BelongsTo(() => Agency, "agencyId")
 	declare agency: Agency;
+
+	@BelongsTo(() => User, { foreignKey: "createdByInstructorId", onDelete: "SET NULL", onUpdate: "CASCADE" })
+	declare createdByInstructor: User;
 
 	@HasMany(() => Practicum, "supervisorId")
 	declare practicums: Practicum[];

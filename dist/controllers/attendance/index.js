@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getTodayAttendanceController = exports.getAttendanceStatsController = exports.getStudentAttendanceController = exports.clockOutController = exports.clockInController = exports.getAttendanceController = exports.listInstructorAttendanceController = exports.listAttendanceController = void 0;
+exports.rejectAttendanceController = exports.approveAttendanceController = exports.getTodayAttendanceController = exports.getAttendanceStatsController = exports.getStudentAttendanceController = exports.clockOutController = exports.clockInController = exports.getAttendanceController = exports.listInstructorAttendanceController = exports.listAttendanceController = void 0;
 const http_status_codes_1 = require("http-status-codes");
 const sequelize_1 = require("sequelize");
 const error_1 = require("../../utils/error.js");
@@ -391,4 +391,61 @@ const getTodayAttendanceController = async (req, res) => {
     });
 };
 exports.getTodayAttendanceController = getTodayAttendanceController;
-// Approval/Decline removed per product decision
+const approveAttendanceController = async (req, res) => {
+    const { id } = req.params;
+    if (!id)
+        throw new error_1.BadRequestError("Attendance ID is required");
+    const approverId = req.user?.id;
+    if (!approverId)
+        throw new error_1.BadRequestError("Missing authenticated user context");
+    const { notes = null } = req.body || {};
+    const result = await (0, attendance_1.approveAttendanceData)(id, approverId, notes);
+    // Log audit event
+    await (0, audit_logger_1.logStudentAction)(req, {
+        action: "Attendance Approved",
+        resource: "Attendance",
+        resourceId: id,
+        details: `Instructor approved attendance record${notes ? ` with notes` : ""}`,
+        category: "attendance",
+        severity: "medium",
+        status: "success",
+        metadata: {
+            attendanceId: id,
+            approverId,
+            hasNotes: !!notes,
+        },
+    });
+    res
+        .status(http_status_codes_1.StatusCodes.OK)
+        .json({ success: true, message: "Attendance approved", data: result });
+};
+exports.approveAttendanceController = approveAttendanceController;
+const rejectAttendanceController = async (req, res) => {
+    const { id } = req.params;
+    if (!id)
+        throw new error_1.BadRequestError("Attendance ID is required");
+    const approverId = req.user?.id;
+    if (!approverId)
+        throw new error_1.BadRequestError("Missing authenticated user context");
+    const { reason = null } = req.body || {};
+    const result = await (0, attendance_1.rejectAttendanceData)(id, approverId, reason);
+    // Log audit event
+    await (0, audit_logger_1.logStudentAction)(req, {
+        action: "Attendance Rejected",
+        resource: "Attendance",
+        resourceId: id,
+        details: `Instructor rejected attendance record${reason ? `: ${reason}` : ""}`,
+        category: "attendance",
+        severity: "medium",
+        status: "warning",
+        metadata: {
+            attendanceId: id,
+            approverId,
+            rejectionReason: reason,
+        },
+    });
+    res
+        .status(http_status_codes_1.StatusCodes.OK)
+        .json({ success: true, message: "Attendance rejected", data: result });
+};
+exports.rejectAttendanceController = rejectAttendanceController;

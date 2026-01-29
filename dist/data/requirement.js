@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.hardDeleteRequirementData = exports.archiveRequirementData = exports.restoreRequirementData = exports.getArchivedRequirementsData = exports.getStudentUnreadCommentsData = exports.getRequirementCommentsData = exports.createRequirementCommentData = exports.getRequirementStatsData = exports.updateRequirementDueDateData = exports.rejectRequirementData = exports.approveRequirementData = exports.updateRequirementFileData = exports.findRequirementByID = exports.getRequirementsData = exports.createRequirementFromTemplateData = void 0;
+exports.hardDeleteRequirementData = exports.archiveRequirementData = exports.restoreRequirementData = exports.getArchivedRequirementsData = exports.getStudentUnreadCommentsData = exports.getRequirementCommentsData = exports.createRequirementCommentData = exports.getRequirementStatsData = exports.updateRequirementDueDateData = exports.rejectRequirementData = exports.approveRequirementData = exports.updateRequirementFileData = exports.findRequirementByID = exports.getRequirementsData = exports.checkHealthRequirementAccess = exports.createRequirementFromTemplateData = void 0;
 const sequelize_1 = require("sequelize");
 const requirement_1 = __importDefault(require("../db/models/requirement.js"));
 const requirement_template_1 = __importDefault(require("../db/models/requirement-template.js"));
@@ -13,6 +13,8 @@ const student_enrollment_1 = __importDefault(require("../db/models/student-enrol
 const section_1 = __importDefault(require("../db/models/section.js"));
 const practicum_1 = __importDefault(require("../db/models/practicum.js"));
 const agency_1 = __importDefault(require("../db/models/agency.js"));
+const instructor_1 = require("../utils/instructor.js");
+const error_1 = require("../utils/error.js");
 const createRequirementFromTemplateData = async (params) => {
     const template = await requirement_template_1.default.findByPk(params.templateId);
     if (!template) {
@@ -33,8 +35,40 @@ const createRequirementFromTemplateData = async (params) => {
     return requirement;
 };
 exports.createRequirementFromTemplateData = createRequirementFromTemplateData;
+/**
+ * Check if authenticated user has access to a health requirement
+ * - Students: Can only access their own health requirements
+ * - Instructors: Can only access health requirements for students in their sections
+ * - Admins: Can access all health requirements
+ */
+const checkHealthRequirementAccess = async (requirement, authUser) => {
+    if (!authUser)
+        return false;
+    const category = (requirement.category || "").toLowerCase();
+    if (category !== "health") {
+        // Non-health requirements are not restricted
+        return true;
+    }
+    const userRole = authUser.role?.toLowerCase();
+    const userId = authUser.id;
+    // Admins can access all health requirements
+    if (userRole === "admin") {
+        return true;
+    }
+    // Students can only access their own health requirements
+    if (userRole === "student") {
+        return requirement.studentId === userId;
+    }
+    // Instructors can only access health requirements for students in their sections
+    if (userRole === "instructor") {
+        return await (0, instructor_1.instructorOwnsStudent)(userId, requirement.studentId);
+    }
+    // Default: deny access
+    return false;
+};
+exports.checkHealthRequirementAccess = checkHealthRequirementAccess;
 const getRequirementsData = async (params) => {
-    const { page, limit, search, status, studentId, practicumId, instructorId } = params;
+    const { page, limit, search, status, studentId, practicumId, instructorId, authUser } = params;
     const offset = (page - 1) * limit;
     const where = {};
     const andConditions = [];
@@ -80,6 +114,28 @@ const getRequirementsData = async (params) => {
     }
     if (practicumId) {
         where.practicumId = practicumId;
+    }
+    // Apply health requirement access control at query level
+    if (authUser) {
+        const userRole = authUser.role?.toLowerCase();
+        const userId = authUser.id;
+        if (userRole === "student") {
+            // Students: Can only see health requirements where they are the student
+            andConditions.push({
+                [sequelize_1.Op.or]: [
+                    { category: { [sequelize_1.Op.ne]: "health" } }, // Non-health requirements
+                    { studentId: userId }, // Or their own health requirements
+                ],
+            });
+        }
+        else if (userRole === "instructor") {
+            // Instructors: Can only see health requirements for their students
+            // We'll need to filter this after fetching student IDs, but add a base condition
+            // For now, we'll handle this in post-processing for instructors
+            // The instructorId filter already ensures they only see their students' requirements
+            // So we just need to ensure health requirements are included only for their students
+        }
+        // Admins: No additional filtering needed - they can see all
     }
     // Combine all AND conditions
     if (andConditions.length > 0) {
@@ -246,18 +302,44 @@ const getRequirementsData = async (params) => {
             },
         ],
     });
+    // Filter health requirements based on access control (post-processing for instructors)
+    // This is needed because instructor-student relationships require checking enrollments
+    let filteredRows = rows;
+    let filteredCount = count;
+    if (authUser) {
+        const userRole = authUser.role?.toLowerCase();
+        // For instructors, we need to verify each health requirement belongs to their students
+        if (userRole === "instructor" && instructorId === authUser.id) {
+            const accessChecks = await Promise.all(rows.map(async (req) => {
+                const category = (req.category || "").toLowerCase();
+                if (category === "health") {
+                    // Verify this health requirement is for a student in instructor's sections
+                    return await (0, exports.checkHealthRequirementAccess)(req, authUser);
+                }
+                return true; // Non-health requirements are already filtered by instructorId
+            }));
+            filteredRows = rows.filter((_, index) => accessChecks[index]);
+            // Note: Count adjustment would require a separate query, so we use filteredRows.length
+            // This may cause slight pagination inconsistencies, but is acceptable for security
+            filteredCount = filteredRows.length;
+        }
+        else {
+            // For students and admins, filtering is already done in WHERE clause
+            filteredRows = rows;
+        }
+    }
     return {
-        requirements: rows,
+        requirements: filteredRows,
         pagination: {
             currentPage: page,
-            totalPages: Math.ceil(count / limit),
-            totalItems: count,
+            totalPages: Math.ceil(filteredCount / limit),
+            totalItems: filteredCount,
             itemsPerPage: limit,
         },
     };
 };
 exports.getRequirementsData = getRequirementsData;
-const findRequirementByID = async (id) => {
+const findRequirementByID = async (id, authUser) => {
     const req = await requirement_1.default.findByPk(id, {
         include: [
             { model: requirement_template_1.default, as: "template" },
@@ -273,6 +355,16 @@ const findRequirementByID = async (id) => {
             },
         ],
     });
+    if (!req) {
+        return null;
+    }
+    // Check access for health requirements
+    if (authUser) {
+        const hasAccess = await (0, exports.checkHealthRequirementAccess)(req, authUser);
+        if (!hasAccess) {
+            throw new error_1.UnauthorizedError("You do not have permission to access this health-related requirement");
+        }
+    }
     return req;
 };
 exports.findRequirementByID = findRequirementByID;
@@ -443,11 +535,30 @@ const getStudentUnreadCommentsData = async (studentId, lastCheckTime) => {
 exports.getStudentUnreadCommentsData = getStudentUnreadCommentsData;
 // Archive functions
 const getArchivedRequirementsData = async (params) => {
-    const { page, limit, search } = params;
+    const { page, limit, search, authUser } = params;
     const offset = (page - 1) * limit;
     const whereClause = {
         isActive: false, // Only include archived (inactive) requirements
     };
+    // Apply health requirement access control
+    if (authUser) {
+        const userRole = authUser.role?.toLowerCase();
+        const userId = authUser.id;
+        if (userRole === "student") {
+            // Students: Can only see their own archived health requirements
+            whereClause[sequelize_1.Op.and] = [
+                ...(whereClause[sequelize_1.Op.and] || []),
+                {
+                    [sequelize_1.Op.or]: [
+                        { category: { [sequelize_1.Op.ne]: "health" } },
+                        { studentId: userId },
+                    ],
+                },
+            ];
+        }
+        // Instructors and admins: No additional filtering at query level
+        // Will be filtered post-query for instructors
+    }
     if (search) {
         whereClause[sequelize_1.Op.or] = [
             { title: { [sequelize_1.Op.like]: `%${search}%` } },
@@ -477,12 +588,29 @@ const getArchivedRequirementsData = async (params) => {
         offset,
         order: [["updatedAt", "DESC"]], // Order by updatedAt (deletion time)
     });
+    // Filter health requirements for instructors
+    let filteredRequirements = requirements;
+    let filteredCount = count;
+    if (authUser) {
+        const userRole = authUser.role?.toLowerCase();
+        if (userRole === "instructor") {
+            const accessChecks = await Promise.all(requirements.map(async (req) => {
+                const category = (req.category || "").toLowerCase();
+                if (category === "health") {
+                    return await (0, exports.checkHealthRequirementAccess)(req, authUser);
+                }
+                return true; // Non-health requirements are accessible
+            }));
+            filteredRequirements = requirements.filter((_, index) => accessChecks[index]);
+            filteredCount = filteredRequirements.length;
+        }
+    }
     // Look up who deleted each requirement from audit logs (if available)
-    const requirementIds = requirements.map((r) => r.id);
+    const requirementIds = filteredRequirements.map((r) => r.id);
     let deletedByMap = {};
     // Note: Audit logging for requirement deletion would need to be implemented
     // For now, we'll use instructor info if available, or "Unknown"
-    for (const req of requirements) {
+    for (const req of filteredRequirements) {
         const reqData = req.toJSON();
         if (reqData.instructor) {
             const instructor = reqData.instructor;
@@ -493,7 +621,7 @@ const getArchivedRequirementsData = async (params) => {
         }
     }
     // Transform to archive format
-    const items = requirements.map((requirement) => {
+    const items = filteredRequirements.map((requirement) => {
         const reqData = requirement.toJSON();
         return {
             id: requirement.id,
@@ -513,8 +641,8 @@ const getArchivedRequirementsData = async (params) => {
         items,
         pagination: {
             currentPage: page,
-            totalPages: Math.ceil(count / limit),
-            totalItems: count,
+            totalPages: Math.ceil(filteredCount / limit),
+            totalItems: filteredCount,
             itemsPerPage: limit,
         },
     };

@@ -148,6 +148,7 @@ const createUserData = async (userData) => {
             program: userData?.program,
             specialization: userData?.specialization,
             yearLevel: userData?.yearLevel,
+            ojtHours: userData?.ojtHours,
             role: finalRole, // Explicitly set role, don't rely on database defaults
         }, { transaction: t });
         if (!user) {
@@ -302,6 +303,9 @@ const updateUserData = async (id, userData) => {
         }),
         ...(userData.yearLevel !== undefined && {
             yearLevel: userData.yearLevel || null,
+        }),
+        ...(userData.ojtHours !== undefined && {
+            ojtHours: userData.ojtHours || null,
         }),
     }, { transaction: t });
     await t.commit();

@@ -91,6 +91,17 @@ export const upsertPracticumController = async (req: Request, res: Response) => 
 
 		const course = enrollment.section.course;
 
+		// Get instructor's OJT hours as default
+		let defaultOjtHours = 400;
+		if (enrollment.section.instructorId) {
+			const instructor = await User.findByPk(enrollment.section.instructorId, {
+				transaction,
+			});
+			if (instructor && instructor.ojtHours) {
+				defaultOjtHours = instructor.ojtHours;
+			}
+		}
+
 		const existingPracticum = await Practicum.findOne({
 			where: { studentId },
 			transaction,
@@ -105,7 +116,7 @@ export const upsertPracticumController = async (req: Request, res: Response) => 
 			position,
 			startDate: new Date(startDate),
 			endDate: new Date(endDate),
-			totalHours: Number(totalHours) || 400,
+			totalHours: Number(totalHours) || defaultOjtHours,
 			workSetup,
 			status: "active" as const,
 			supervisorId: supervisorId || null, // Allow null to remove supervisor

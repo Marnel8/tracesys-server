@@ -12,6 +12,8 @@ import {
   findAttendanceByIdData,
   getAttendanceListData,
   nullifyIncompleteSessions,
+  approveAttendanceData,
+  rejectAttendanceData,
 } from "@/data/attendance";
 import StudentEnrollment from "@/db/models/student-enrollment";
 import Section from "@/db/models/section";
@@ -493,4 +495,72 @@ export const getTodayAttendanceController = async (
   });
 };
 
-// Approval/Decline removed per product decision
+export const approveAttendanceController = async (
+  req: Request,
+  res: Response
+) => {
+  const { id } = req.params;
+  if (!id) throw new BadRequestError("Attendance ID is required");
+  const approverId = req.user?.id;
+  if (!approverId)
+    throw new BadRequestError("Missing authenticated user context");
+  const { notes = null } = req.body || {};
+  const result = await approveAttendanceData(id, approverId, notes);
+
+  // Log audit event
+  await logStudentAction(req, {
+    action: "Attendance Approved",
+    resource: "Attendance",
+    resourceId: id,
+    details: `Instructor approved attendance record${
+      notes ? ` with notes` : ""
+    }`,
+    category: "attendance",
+    severity: "medium",
+    status: "success",
+    metadata: {
+      attendanceId: id,
+      approverId,
+      hasNotes: !!notes,
+    },
+  });
+
+  res
+    .status(StatusCodes.OK)
+    .json({ success: true, message: "Attendance approved", data: result });
+};
+
+export const rejectAttendanceController = async (
+  req: Request,
+  res: Response
+) => {
+  const { id } = req.params;
+  if (!id) throw new BadRequestError("Attendance ID is required");
+  const approverId = req.user?.id;
+  if (!approverId)
+    throw new BadRequestError("Missing authenticated user context");
+  const { reason = null } = req.body || {};
+  const result = await rejectAttendanceData(id, approverId, reason);
+
+  // Log audit event
+  await logStudentAction(req, {
+    action: "Attendance Rejected",
+    resource: "Attendance",
+    resourceId: id,
+    details: `Instructor rejected attendance record${
+      reason ? `: ${reason}` : ""
+    }`,
+    category: "attendance",
+    severity: "medium",
+    status: "warning",
+    metadata: {
+      attendanceId: id,
+      approverId,
+      rejectionReason: reason,
+    },
+  });
+
+  res
+    .status(StatusCodes.OK)
+    .json({ success: true, message: "Attendance rejected", data: result });
+};

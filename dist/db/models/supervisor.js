@@ -15,6 +15,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const sequelize_typescript_1 = require("sequelize-typescript");
 const agency_1 = __importDefault(require("./agency.js"));
 const practicum_1 = __importDefault(require("./practicum.js"));
+const user_1 = __importDefault(require("./user.js"));
 let Supervisor = class Supervisor extends sequelize_typescript_1.Model {
 };
 __decorate([
@@ -55,6 +56,12 @@ __decorate([
     __metadata("design:type", Boolean)
 ], Supervisor.prototype, "isActive", void 0);
 __decorate([
+    (0, sequelize_typescript_1.ForeignKey)(() => user_1.default),
+    (0, sequelize_typescript_1.Index)({ name: "idx_supervisors_createdByInstructorId" }),
+    (0, sequelize_typescript_1.Column)({ type: sequelize_typescript_1.DataType.UUID, allowNull: true }),
+    __metadata("design:type", Object)
+], Supervisor.prototype, "createdByInstructorId", void 0);
+__decorate([
     sequelize_typescript_1.CreatedAt,
     __metadata("design:type", Date)
 ], Supervisor.prototype, "createdAt", void 0);
@@ -66,6 +73,10 @@ __decorate([
     (0, sequelize_typescript_1.BelongsTo)(() => agency_1.default, "agencyId"),
     __metadata("design:type", agency_1.default)
 ], Supervisor.prototype, "agency", void 0);
+__decorate([
+    (0, sequelize_typescript_1.BelongsTo)(() => user_1.default, { foreignKey: "createdByInstructorId", onDelete: "SET NULL", onUpdate: "CASCADE" }),
+    __metadata("design:type", user_1.default)
+], Supervisor.prototype, "createdByInstructor", void 0);
 __decorate([
     (0, sequelize_typescript_1.HasMany)(() => practicum_1.default, "supervisorId"),
     __metadata("design:type", Array)

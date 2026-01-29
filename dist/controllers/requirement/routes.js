@@ -21,6 +21,8 @@ router.delete("/requirements/:id/hard-delete", auth_1.isAuthenticated, _1.hardDe
 router.get("/instructor/requirements", auth_1.isAuthenticated, (0, auth_1.authorizeRoles)("instructor"), _1.getInstructorRequirementsController);
 // Get single requirement
 router.get("/requirements/:id", auth_1.isAuthenticated, _1.getRequirementController);
+// Download requirement file (protected endpoint for health requirements)
+router.get("/requirements/:id/download", auth_1.isAuthenticated, _1.downloadRequirementFileController);
 // Submit requirement (student)
 router.post("/requirements/:id/submit", auth_1.isAuthenticated, uploader_1.default.single("submissionFile"), _1.submitRequirementController);
 // Approve (instructor)

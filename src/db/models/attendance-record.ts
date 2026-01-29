@@ -78,6 +78,9 @@ export default class AttendanceRecord extends Model {
 	@Column({ type: DataType.FLOAT, allowNull: true })
 	declare hours: number;
 
+	@Column({ type: DataType.FLOAT, allowNull: true })
+	declare undertimeHours: number;
+
 	@Column({
 		type: DataType.ENUM("present", "absent", "late", "excused"),
 		allowNull: false,

@@ -76,8 +76,32 @@ sequelize
     console.log(colors_1.default.green(`Connected to the database: ${process.env.DB_NAME}`));
     if (process.env.DB_SYNC_ALTER === "true") {
         console.log(colors_1.default.yellow("DB_SYNC_ALTER enabled - running sync({ alter: true })"));
-        await sequelize.sync({ alter: true, force: false });
-        console.log(colors_1.default.green("Database synchronized successfully."));
+        try {
+            await sequelize.sync({ alter: true, force: false });
+            console.log(colors_1.default.green("Database synchronized successfully."));
+        }
+        catch (error) {
+            // Handle MySQL "Too many keys" error gracefully
+            if (error?.parent?.code === "ER_TOO_MANY_KEYS" || error?.code === "ER_TOO_MANY_KEYS") {
+                const sqlMessage = error?.parent?.sqlMessage || error?.message || "";
+                // Only show warning if it's about a constraint that might not exist
+                // If it's about departments.code unique constraint, it likely already exists
+                if (sqlMessage.includes("departments") && sqlMessage.includes("code")) {
+                    // Suppress warning - constraint already exists as confirmed by migration
+                    console.log(colors_1.default.gray("Note: Unique constraint on departments.code already exists (skipped)."));
+                }
+                else {
+                    console.warn(colors_1.default.yellow("Warning: Database sync encountered 'Too many keys' error. " +
+                        "This usually means the table already has the maximum number of indexes (64). " +
+                        "The constraint/index may already exist. Continuing..."));
+                    console.warn(colors_1.default.yellow(`Error details: ${sqlMessage}`));
+                }
+            }
+            else {
+                // Re-throw other errors
+                throw error;
+            }
+        }
     }
 })
     .catch((error) => {
@@ -85,8 +109,26 @@ sequelize
 });
 // To run a one-time destructive sync use DB_SYNC_FORCE=true (not recommended in prod)
 if (process.env.DB_SYNC_FORCE === "true") {
-    sequelize.sync({ alter: true, force: false }).then(() => {
+    sequelize.sync({ alter: true, force: false })
+        .then(() => {
         console.log(colors_1.default.red("Database FORCE synchronized - all tables dropped and recreated."));
+    })
+        .catch((error) => {
+        // Handle MySQL "Too many keys" error gracefully
+        if (error?.parent?.code === "ER_TOO_MANY_KEYS" || error?.code === "ER_TOO_MANY_KEYS") {
+            const sqlMessage = error?.parent?.sqlMessage || error?.message || "";
+            if (sqlMessage.includes("departments") && sqlMessage.includes("code")) {
+                console.log(colors_1.default.gray("Note: Unique constraint on departments.code already exists (skipped)."));
+            }
+            else {
+                console.warn(colors_1.default.yellow("Warning: Database sync encountered 'Too many keys' error. " +
+                    "This usually means the table already has the maximum number of indexes (64). " +
+                    "The constraint/index may already exist."));
+            }
+        }
+        else {
+            console.error(colors_1.default.red("Database sync error:"), error);
+        }
     });
 }
 exports.default = sequelize;

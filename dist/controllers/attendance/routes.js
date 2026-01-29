@@ -22,4 +22,8 @@ router.post("/attendance/clock-in", auth_1.isAuthenticated, uploader_1.default.s
 router.post("/attendance/clock-out", auth_1.isAuthenticated, uploader_1.default.single("photo"), _1.clockOutController);
 // Get a single attendance record (must come after specific routes)
 router.get("/attendance/:id", auth_1.isAuthenticated, _1.getAttendanceController);
+// Approve attendance (instructor)
+router.put("/attendance/:id/approve", auth_1.isAuthenticated, (0, auth_1.authorizeRoles)("instructor"), _1.approveAttendanceController);
+// Reject attendance (instructor)
+router.put("/attendance/:id/reject", auth_1.isAuthenticated, (0, auth_1.authorizeRoles)("instructor"), _1.rejectAttendanceController);
 exports.default = router;

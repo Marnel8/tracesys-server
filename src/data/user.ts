@@ -133,6 +133,7 @@ export const createUserData = async (userData: CreateUserParams) => {
         program: userData?.program,
         specialization: userData?.specialization,
         yearLevel: userData?.yearLevel,
+        ojtHours: userData?.ojtHours,
         role: finalRole, // Explicitly set role, don't rely on database defaults
       },
       { transaction: t }
@@ -319,6 +320,9 @@ export const updateUserData = async (
       }),
       ...(userData.yearLevel !== undefined && {
         yearLevel: userData.yearLevel || null,
+      }),
+      ...(userData.ojtHours !== undefined && {
+        ojtHours: userData.ojtHours || null,
       }),
     },
     { transaction: t }

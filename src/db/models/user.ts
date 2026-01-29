@@ -167,6 +167,9 @@ export default class User extends Model {
   })
   declare allowLoginWithoutRequirements: boolean;
 
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare ojtHours: number;
+
   @CreatedAt
   declare createdAt: Date;
 

@@ -46,6 +46,8 @@ const error_1 = require("../../utils/error.js");
 const user_3 = require("../../data/user.js");
 const student_enrollment_1 = __importDefault(require("../../db/models/student-enrollment.js"));
 const section_1 = __importDefault(require("../../db/models/section.js"));
+const agency_1 = __importDefault(require("../../db/models/agency.js"));
+const audit_1 = require("../../middlewares/audit.js");
 const requirement_1 = __importDefault(require("../../db/models/requirement.js"));
 const sequelize_1 = require("sequelize");
 const jwt_1 = require("../../utils/jwt.js");
@@ -374,7 +376,7 @@ const logoutController = async (req, res) => {
 exports.logoutController = logoutController;
 const editUserController = async (req, res) => {
     const { id } = req.params;
-    const { firstName, lastName, middleName, email, phone, age, gender, address, bio, studentId, instructorId, role, password, departmentId, program, specialization, yearLevel, } = req.body;
+    const { firstName, lastName, middleName, email, phone, age, gender, address, bio, studentId, instructorId, role, password, departmentId, program, specialization, yearLevel, ojtHours, } = req.body;
     if (!id) {
         throw new error_1.BadRequestError("User ID is required.");
     }
@@ -398,6 +400,7 @@ const editUserController = async (req, res) => {
         ...(program !== undefined && { program }),
         ...(specialization !== undefined && { specialization }),
         ...(yearLevel !== undefined && { yearLevel }),
+        ...(ojtHours !== undefined && { ojtHours }),
         ...(avatar && { avatar }),
     };
     const updatedUser = await (0, user_3.updateUserData)(id, updateData);
@@ -528,7 +531,37 @@ const deleteUserController = async (req, res) => {
     if (id === req.user?.id) {
         throw new error_1.BadRequestError("You cannot delete your own account.");
     }
+    // Get user details to check role
+    const user = await (0, user_3.findUserByID)(id);
+    if (!user) {
+        throw new error_1.NotFoundError("User not found.");
+    }
+    // Get agencies that will be affected (if user is an instructor)
+    const affectedAgencies = user.role === user_2.UserRole.INSTRUCTOR
+        ? await agency_1.default.findAll({
+            where: { instructorId: id },
+            attributes: ["id", "name"]
+        })
+        : [];
     await (0, user_3.deleteUserData)(id);
+    // Log audit events for each affected agency
+    for (const agency of affectedAgencies) {
+        await (0, audit_1.logAuditEvent)(req, {
+            action: "Agency Updated",
+            resource: "Agency Management",
+            resourceId: agency.id,
+            details: `Agency instructorId cleared due to user deletion: ${agency.name}`,
+            category: "user_management",
+            severity: "medium",
+            metadata: {
+                agencyName: agency.name,
+                agencyId: agency.id,
+                updatedDuring: "user_deletion",
+                deletedUserId: id,
+                deletedUserName: `${user.firstName} ${user.lastName}`,
+            },
+        });
+    }
     res.status(http_status_codes_1.StatusCodes.OK).json({
         success: true,
         message: "User permanently deleted successfully",

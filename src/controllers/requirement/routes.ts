@@ -18,6 +18,7 @@ import {
 	restoreRequirementController,
 	hardDeleteRequirementController,
 	archiveRequirementController,
+	downloadRequirementFileController,
 } from ".";
 
 const router = Router();
@@ -48,6 +49,9 @@ router.get(
 
 // Get single requirement
 router.get("/requirements/:id", isAuthenticated, getRequirementController);
+
+// Download requirement file (protected endpoint for health requirements)
+router.get("/requirements/:id/download", isAuthenticated, downloadRequirementFileController);
 
 // Submit requirement (student)
 router.post(

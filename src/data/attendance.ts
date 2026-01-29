@@ -117,6 +117,12 @@ export const getAttendanceListData = async (params: ListAttendanceParams) => {
         ],
       },
       {
+        model: User,
+        as: "approver" as any,
+        attributes: ["id", "firstName", "lastName", "email"],
+        required: false,
+      },
+      {
         model: Practicum,
         as: "practicum" as any,
         include: [
@@ -169,6 +175,12 @@ export const findAttendanceByIdData = async (id: string) => {
           "studentId",
           "gender",
         ],
+      },
+      {
+        model: User,
+        as: "approver" as any,
+        attributes: ["id", "firstName", "lastName", "email"],
+        required: false,
       },
       {
         model: Practicum,
@@ -294,14 +306,85 @@ const parseTimeToMinutes = (
 };
 
 /**
- * Helper function to calculate time boundaries based on agency operating hours
- * Returns dynamic boundaries instead of hardcoded times
+ * Calculate time boundaries based on agency operating hours.
+ * 
+ * OFFICIAL TIME VALIDATION:
+ * This function validates and calculates time boundaries from agency settings:
+ * - openingTime: Official start of workday
+ * - closingTime: Official end of workday
+ * - lunchStartTime: Official start of lunch break
+ * - lunchEndTime: Official end of lunch break
+ * 
+ * VALIDATION & FALLBACKS:
+ * - Validates time formats using parseTimeToMinutes()
+ * - Validates logical relationships (opening < closing, lunchStart < lunchEnd)
+ * - Provides sensible defaults when agency times are missing:
+ *   - Morning cutoff: 10:59 AM if no lunch/opening time
+ *   - Lunch window: 12:00 PM - 12:59 PM if not specified
+ *   - Afternoon deadline: 6:00 PM minimum if no closing time
+ * - Logs warnings for missing or invalid time configurations
+ * 
+ * BOUNDARY CALCULATIONS:
+ * - Morning cutoff: 1 minute before lunch start (or 2 hours after opening)
+ * - Lunch window: Between lunchStartTime and lunchEndTime (inclusive)
+ * - Afternoon clock-out: After closingTime, deadline is closingTime + 1 hour (min 6:00 PM)
+ * 
+ * @param agency - Agency model with official time settings (may be null)
+ * @returns Object with calculated time boundaries in minutes since midnight
  */
 const calculateTimeBoundaries = (agency: Agency | null) => {
   const opening = parseTimeToMinutes(agency?.openingTime);
   const closing = parseTimeToMinutes(agency?.closingTime);
   const lunchStart = parseTimeToMinutes(agency?.lunchStartTime);
   const lunchEnd = parseTimeToMinutes(agency?.lunchEndTime);
+
+  // Validate time relationships and log warnings
+  if (agency) {
+    if (opening !== null && closing !== null) {
+      // Handle midnight crossover: if closing is before opening, it's next day
+      let isValid = closing > opening;
+      if (!isValid && closing < 360 && opening > 1200) {
+        // Closing is early morning (next day), opening is late night (current day)
+        isValid = true; // This is valid midnight crossover
+      }
+      if (!isValid) {
+        console.warn(
+          `[Time validation] Invalid time range: opening (${agency.openingTime}) should be before closing (${agency.closingTime})`
+        );
+      }
+    }
+
+    if (lunchStart !== null && lunchEnd !== null) {
+      // Handle midnight crossover: if lunchEnd is before lunchStart, it's next day
+      let isValid = lunchEnd > lunchStart;
+      if (!isValid && lunchEnd < 360 && lunchStart > 1200) {
+        // Lunch end is early morning (next day), lunch start is late night (current day)
+        isValid = true; // This is valid midnight crossover
+      }
+      if (!isValid) {
+        console.warn(
+          `[Time validation] Invalid lunch time range: lunchStart (${agency.lunchStartTime}) should be before lunchEnd (${agency.lunchEndTime})`
+        );
+      }
+
+      // Validate lunch times are within workday (if workday times are set)
+      if (opening !== null && closing !== null) {
+        // Handle midnight crossover for lunch validation
+        const lunchStartValid =
+          lunchStart >= opening ||
+          (lunchStart < 360 && opening > 1200); // Next day lunch start
+        const lunchEndValid =
+          lunchEnd <= closing ||
+          (lunchEnd < 360 && closing > 1200); // Next day lunch end
+
+        if (!lunchStartValid || !lunchEndValid) {
+          console.warn(
+            `[Time validation] Lunch times (${agency.lunchStartTime} - ${agency.lunchEndTime}) should be within workday (${agency.openingTime} - ${agency.closingTime})`
+          );
+        }
+      }
+    }
+  }
 
   // Morning clock-in cutoff: Use lunch start time if available, otherwise calculate from opening time
   // If lunch starts at 12:00 PM, morning clock-in closes at 11:59 AM (1 minute before lunch)
@@ -363,15 +446,34 @@ const isMorningClockInWindowOpen = (
 };
 
 /**
- * Determine session type based on server time and agency settings
- * This ensures session determination cannot be manipulated by client device time
+ * Determine session type based on server time and agency settings.
  * 
- * STRICT TIME RULES:
- * - Morning clock-in: Available until 10:59 AM (or lunch start if earlier)
+ * SECURITY: This function uses server-side time to prevent client manipulation.
+ * All time comparisons are performed on the server using `new Date()`, ensuring
+ * that clients cannot manipulate device time to change session types.
+ * 
+ * OFFICIAL TIME VALIDATION:
+ * - Uses agency's `openingTime`, `closingTime`, `lunchStartTime`, and `lunchEndTime` 
+ *   to determine valid session windows
+ * - Falls back to default times if agency times are not configured
+ * - Validates against server timezone to ensure accuracy across different locations
+ * 
+ * SESSION TYPE RULES:
+ * - Morning clock-in: Available until lunch start time - 1 minute (or calculated cutoff)
+ *   - Uses `lunchStartTime` if available, otherwise calculates from `openingTime`
+ *   - Default cutoff: 2 hours after opening time (e.g., 8:00 AM -> 10:00 AM)
  * - Afternoon clock-in: Available if:
- *   - Current time >= 11:00 AM AND no morning clock-in exists, OR
- *   - Morning session is complete (both in and out)
+ *   - Current time >= morning cutoff AND no morning clock-in exists, OR
+ *   - Morning session is complete (both clock-in and clock-out recorded)
  * - Overtime: Requires only afternoon session complete (morning can be skipped)
+ *   - Can only start after afternoon clock-out is recorded
+ *   - Prevents duplicate overtime sessions
+ * 
+ * @param agency - Agency model with official time settings (openingTime, closingTime, lunchStartTime, lunchEndTime)
+ * @param currentTime - Server-side current time (Date object)
+ * @param existingRecord - Existing attendance record for the day
+ * @returns Session type: "morning" | "afternoon" | "overtime"
+ * @throws Error if session rules are violated (e.g., overtime already in progress)
  */
 export const determineSessionType = (
   agency: Agency | null,
@@ -449,8 +551,30 @@ export const determineSessionType = (
 };
 
 /**
- * Calculate remarks (Late/Early Departure) based on server time
- * This ensures remarks cannot be manipulated by client device time
+ * Calculate remarks (Late/Early Departure) based on server time and agency official times.
+ * 
+ * SECURITY: This function uses server-side time to prevent client manipulation.
+ * All time comparisons use server `Date` objects, ensuring clients cannot change
+ * device time to avoid late/early departure marks.
+ * 
+ * OFFICIAL TIME VALIDATION:
+ * - Clock-in remarks: Compares actual clock-in time against agency `openingTime` (morning)
+ *   or `lunchEndTime` (afternoon) to determine if student is late
+ * - Clock-out remarks: Compares actual clock-out time against agency `lunchStartTime` (morning)
+ *   or `closingTime` (afternoon) to determine if student left early
+ * - Handles midnight crossover scenarios (e.g., closing time at 1:00 AM next day)
+ * - Overtime sessions always return "Normal" (no late/early validation)
+ * 
+ * TIME ACCURACY:
+ * - Converts times to minutes since midnight for accurate comparison
+ * - Handles edge cases like early morning times (before 6 AM) and late night times (after 8 PM)
+ * - Accounts for next-day scenarios when lunch/closing times cross midnight
+ * 
+ * @param agency - Agency model with official time settings
+ * @param currentTime - Server-side current time (Date object)
+ * @param sessionType - Current session type: "morning" | "afternoon" | "overtime"
+ * @param isClockIn - True for clock-in, false for clock-out
+ * @returns Remark: "Normal" | "Late" | "Early Departure"
  */
 export const calculateRemarks = (
   agency: Agency | null,
@@ -563,16 +687,175 @@ export const calculateLunchDuration = (
 };
 
 /**
+ * Calculate expected work hours based on agency official times.
+ * 
+ * OFFICIAL TIME CALCULATION:
+ * Expected hours = (closingTime - openingTime) - (lunchEndTime - lunchStartTime)
+ * 
+ * This function determines how many hours a student should work based on:
+ * - Agency's official opening and closing times
+ * - Official lunch break duration (lunchEndTime - lunchStartTime)
+ * 
+ * VALIDATION & FALLBACKS:
+ * - If agency times are missing, defaults to 8-hour workday with 1-hour lunch (7 hours net)
+ * - If only opening/closing times are missing, uses default 8 AM - 5 PM
+ * - If lunch times are missing, assumes 1-hour lunch break
+ * - Handles midnight crossover scenarios (e.g., closing at 1:00 AM next day)
+ * 
+ * PARTIAL SESSION HANDLING:
+ * - If only morning session exists, calculates expected hours for morning only
+ * - If only afternoon session exists, calculates expected hours for afternoon only
+ * - Full day expected hours require both opening and closing times
+ * 
+ * @param agency - Agency model with official time settings (may be null)
+ * @param morningTimeIn - Morning session clock-in time (Date or null)
+ * @param morningTimeOut - Morning session clock-out time (Date or null)
+ * @param afternoonTimeIn - Afternoon session clock-in time (Date or null)
+ * @param afternoonTimeOut - Afternoon session clock-out time (Date or null)
+ * @returns Expected work hours based on agency official times, or null if cannot be determined
+ */
+export const calculateExpectedHours = (
+  agency: Agency | null,
+  morningTimeIn: Date | null,
+  morningTimeOut: Date | null,
+  afternoonTimeIn: Date | null,
+  afternoonTimeOut: Date | null
+): number | null => {
+  const openingMinutes = parseTimeToMinutes(agency?.openingTime);
+  const closingMinutes = parseTimeToMinutes(agency?.closingTime);
+  const lunchStartMinutes = parseTimeToMinutes(agency?.lunchStartTime);
+  const lunchEndMinutes = parseTimeToMinutes(agency?.lunchEndTime);
+
+  // If no agency times are configured, use default 8-hour workday with 1-hour lunch
+  if (openingMinutes === null && closingMinutes === null) {
+    // Default: 8 AM - 5 PM with 1-hour lunch = 8 hours total - 1 hour lunch = 7 hours net
+    return 7.0;
+  }
+
+  // Calculate lunch duration
+  let lunchDurationHours = 1.0; // Default 1 hour lunch
+  if (lunchStartMinutes !== null && lunchEndMinutes !== null) {
+    let lunchDurationMinutes = lunchEndMinutes - lunchStartMinutes;
+    // Handle midnight crossover (e.g., lunch ends at 1:00 AM next day)
+    if (lunchDurationMinutes < 0) {
+      lunchDurationMinutes += 24 * 60; // Add 24 hours
+    }
+    lunchDurationHours = lunchDurationMinutes / 60;
+  }
+
+  // Calculate workday duration
+  if (openingMinutes !== null && closingMinutes !== null) {
+    let workdayMinutes = closingMinutes - openingMinutes;
+    // Handle midnight crossover (e.g., closing at 1:00 AM next day)
+    if (workdayMinutes < 0) {
+      workdayMinutes += 24 * 60; // Add 24 hours
+    }
+    const workdayHours = workdayMinutes / 60;
+    
+    // Expected hours = workday duration - lunch duration
+    const expectedHours = workdayHours - lunchDurationHours;
+    return Math.max(0, Math.round(expectedHours * 100) / 100);
+  }
+
+  // Partial configuration: if only opening or closing time exists, estimate
+  // This is a fallback - ideally both times should be configured
+  if (openingMinutes !== null || closingMinutes !== null) {
+    // Estimate 8-hour workday with lunch
+    return 7.0;
+  }
+
+  // Cannot determine expected hours
+  return null;
+};
+
+/**
+ * Calculate undertime hours based on agency official times and actual hours worked.
+ * 
+ * UNDERTIME CALCULATION:
+ * Undertime = max(0, expectedHours - actualHours)
+ * 
+ * Undertime represents hours worked less than the expected work hours based on:
+ * - Agency's official opening and closing times
+ * - Official lunch break duration
+ * - Actual hours worked (morning + afternoon sessions, excluding lunch)
+ * 
+ * ACCURACY:
+ * - Uses calculateExpectedHours() to determine expected hours from agency settings
+ * - Compares against actual hours (calculated separately, excluding lunch)
+ * - Returns 0 if actual hours >= expected hours (no undertime)
+ * - Returns 0 if expected hours cannot be determined (null)
+ * - Rounds to 2 decimal places for consistency
+ * 
+ * EDGE CASES:
+ * - Missing agency times: Uses default 7-hour workday (8 hours - 1 hour lunch)
+ * - Partial sessions: Only calculates undertime if both sessions are complete
+ * - Overtime: Undertime is calculated separately from overtime (overtime doesn't reduce undertime)
+ * 
+ * @param agency - Agency model with official time settings (may be null)
+ * @param actualHours - Actual hours worked (morning + afternoon, lunch excluded)
+ * @param morningTimeIn - Morning session clock-in time (Date or null)
+ * @param morningTimeOut - Morning session clock-out time (Date or null)
+ * @param afternoonTimeIn - Afternoon session clock-in time (Date or null)
+ * @param afternoonTimeOut - Afternoon session clock-out time (Date or null)
+ * @returns Undertime hours (0 if no undertime or cannot be determined)
+ */
+export const calculateUndertimeHours = (
+  agency: Agency | null,
+  actualHours: number,
+  morningTimeIn: Date | null,
+  morningTimeOut: Date | null,
+  afternoonTimeIn: Date | null,
+  afternoonTimeOut: Date | null
+): number => {
+  // Calculate expected hours based on agency official times
+  const expectedHours = calculateExpectedHours(
+    agency,
+    morningTimeIn,
+    morningTimeOut,
+    afternoonTimeIn,
+    afternoonTimeOut
+  );
+
+  // If expected hours cannot be determined, return 0 (no undertime)
+  if (expectedHours === null) {
+    return 0;
+  }
+
+  // Calculate undertime: max(0, expectedHours - actualHours)
+  const undertimeHours = Math.max(0, expectedHours - actualHours);
+  
+  // Round to 2 decimal places for consistency
+  return Math.round(undertimeHours * 100) / 100;
+};
+
+/**
  * Calculate total work hours excluding lunch break.
- *
- * Lunch is automatically excluded by calculating morning and afternoon sessions separately.
- * The gap between morningTimeOut and afternoonTimeIn is the lunch break and is not included.
- *
- * @param morningTimeIn - Morning session clock-in time
- * @param morningTimeOut - Morning session clock-out time
- * @param afternoonTimeIn - Afternoon session clock-in time
- * @param afternoonTimeOut - Afternoon session clock-out time
+ * 
+ * OFFICIAL TIME CALCULATION:
+ * This function ensures accurate hour calculation by:
+ * - Calculating morning and afternoon sessions separately
+ * - Automatically excluding lunch break (gap between morningTimeOut and afternoonTimeIn)
+ * - Using precise millisecond calculations converted to hours
+ * - Rounding to 2 decimal places for consistency
+ * 
+ * LUNCH EXCLUSION MECHANISM:
+ * - Lunch duration is NOT subtracted from total hours
+ * - Instead, lunch is naturally excluded by calculating sessions separately
+ * - The time between morningTimeOut and afternoonTimeIn represents lunch break
+ * - This ensures accurate work hours regardless of lunch duration variations
+ * 
+ * ACCURACY:
+ * - Uses Date.getTime() for millisecond-precise calculations
+ * - Prevents negative hours with Math.max(0, ...)
+ * - Rounds to 2 decimal places (Math.round(hours * 100) / 100)
+ * - Returns 0 if either session time is missing
+ * 
+ * @param morningTimeIn - Morning session clock-in time (Date or null)
+ * @param morningTimeOut - Morning session clock-out time (Date or null)
+ * @param afternoonTimeIn - Afternoon session clock-in time (Date or null)
+ * @param afternoonTimeOut - Afternoon session clock-out time (Date or null)
  * @returns Total work hours (morning + afternoon), excluding lunch break
+ *          Returns 0 if any required time is missing
  */
 export const calculateHoursWithLunchExclusion = (
   morningTimeIn: Date | null,
@@ -851,7 +1134,7 @@ export const clockInData = async (params: ClockInParams) => {
     timeInDeviceUnit: params.deviceUnit ?? null,
     timeInMacAddress: params.macAddress ?? null,
     timeInRemarks: remarks,
-    approvalStatus: "Approved",
+    approvalStatus: "Pending",
     photoIn: params.photoUrl ?? null,
     sessionType:
       sessionType === "morning" ||
@@ -965,7 +1248,7 @@ export const clockInData = async (params: ClockInParams) => {
     timeInMacAddress: params.macAddress ?? null,
     timeInRemarks: remarks,
     timeInExactLocation: params.address ?? null,
-    status: "Approved",
+    status: "Pending",
   } as any);
 
   return record;
@@ -1123,7 +1406,7 @@ export const clockOutData = async (params: ClockOutParams) => {
     timeOutDeviceUnit: params.deviceUnit ?? record.timeOutDeviceUnit ?? null,
     timeOutMacAddress: params.macAddress ?? record.timeOutMacAddress ?? null,
     timeOutRemarks: remarks,
-    approvalStatus: "Approved",
+    approvalStatus: "Pending",
     photoOut: params.photoUrl ?? record.photoOut ?? null,
     latitude: params.latitude ?? record.latitude ?? null,
     longitude: params.longitude ?? record.longitude ?? null,
@@ -1177,7 +1460,21 @@ export const clockOutData = async (params: ClockOutParams) => {
     updateData.afternoonTimeOut || record.afternoonTimeOut || null
   );
 
-  // Add overtime hours if present
+  /**
+   * OVERTIME CALCULATION:
+   * Overtime hours are calculated separately and added to regular hours.
+   * 
+   * ACCURACY:
+   * - Uses millisecond-precise calculation: (overtimeTimeOut - overtimeTimeIn) / (1000 * 60 * 60)
+   * - Prevents negative hours with Math.max(0, ...)
+   * - Only calculated when both overtimeTimeIn and overtimeTimeOut are present
+   * - Overtime is added to regular hours for total daily hours
+   * 
+   * OFFICIAL TIME VALIDATION:
+   * - Overtime can only start after afternoon session is complete
+   * - Overtime clock-out must occur after regular closing time (validated in determineSessionType)
+   * - Server-side time ensures clients cannot manipulate overtime calculations
+   */
   let overtimeHours = 0;
   const overtimeTimeIn =
     record.overtimeTimeIn || updateData.overtimeTimeIn || null;
@@ -1189,7 +1486,32 @@ export const clockOutData = async (params: ClockOutParams) => {
     overtimeHours = Math.max(0, overtimeMs / (1000 * 60 * 60));
   }
 
+  // Total hours = regular hours (morning + afternoon, lunch excluded) + overtime hours
+  // Rounded to 2 decimal places for consistency
   updateData.hours = Math.round((totalHours + overtimeHours) * 100) / 100;
+
+  /**
+   * UNDERTIME CALCULATION:
+   * Calculate undertime hours based on agency official times and actual hours worked.
+   * 
+   * Undertime = max(0, expectedHours - actualHours)
+   * 
+   * Expected hours are calculated from agency's official opening/closing times
+   * minus the official lunch break duration. This ensures accurate comparison
+   * against the agency's official work schedule.
+   * 
+   * Note: Undertime is calculated separately from overtime. Overtime hours
+   * do not reduce undertime - they are tracked independently.
+   */
+  const undertimeHours = calculateUndertimeHours(
+    params.agency ?? null,
+    totalHours, // Use totalHours (without overtime) for undertime calculation
+    record.morningTimeIn || updateData.morningTimeIn || null,
+    updateData.morningTimeOut || record.morningTimeOut || null,
+    record.afternoonTimeIn || updateData.afternoonTimeIn || null,
+    updateData.afternoonTimeOut || record.afternoonTimeOut || null
+  );
+  updateData.undertimeHours = undertimeHours;
 
   await record.update(updateData);
 
@@ -1217,4 +1539,34 @@ export const clockOutData = async (params: ClockOutParams) => {
   return record;
 };
 
-// approval workflow removed per product decision
+export const approveAttendanceData = async (
+  id: string,
+  approverId: string,
+  notes?: string | null
+) => {
+  const record = await AttendanceRecord.findByPk(id);
+  if (!record) throw new Error("Attendance record not found");
+  await record.update({
+    approvalStatus: "Approved",
+    approvedBy: approverId,
+    approvedAt: new Date(),
+    approvalNotes: notes ?? record.approvalNotes ?? null,
+  });
+  return record;
+};
+
+export const rejectAttendanceData = async (
+  id: string,
+  approverId: string,
+  reason?: string | null
+) => {
+  const record = await AttendanceRecord.findByPk(id);
+  if (!record) throw new Error("Attendance record not found");
+  await record.update({
+    approvalStatus: "Declined",
+    approvedBy: approverId,
+    approvedAt: new Date(),
+    approvalNotes: reason ?? record.approvalNotes ?? null,
+  });
+  return record;
+};

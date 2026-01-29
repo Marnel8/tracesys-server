@@ -24,7 +24,7 @@ interface CreateAgencyParams {
 	latitude?: number;
 	longitude?: number;
 	isSchoolAffiliated?: boolean;
-	instructorId?: string;
+	instructorId?: string; // Optional - for tracking who created it, but not used for filtering
 }
 
 interface GetAgenciesParams {
@@ -44,6 +44,7 @@ interface CreateSupervisorParams {
 	position: string;
 	department?: string;
 	isActive?: boolean;
+	createdByInstructorId?: string;
 }
 
 interface GetSupervisorsParams {
@@ -52,6 +53,7 @@ interface GetSupervisorsParams {
 	limit: number;
 	search?: string;
 	status?: string;
+	instructorId?: string;
 }
 
 export const createAgencyData = async (data: CreateAgencyParams) => {
@@ -85,10 +87,7 @@ export const getAgenciesData = async (params: GetAgenciesParams) => {
 		// Build where clause
 		const whereClause: any = {};
 
-		// Filter by instructorId if provided (each instructor should only see their own agencies)
-		if (instructorId) {
-			whereClause.instructorId = instructorId;
-		}
+		// Agencies are now shared - no instructor filtering
 
 		if (search) {
 			whereClause[Op.or] = [
@@ -112,6 +111,12 @@ export const getAgenciesData = async (params: GetAgenciesParams) => {
 			whereClause.branchType = branchType;
 		}
 
+		// Build supervisor where clause with instructor filtering
+		const supervisorWhere: any = { isActive: true };
+		if (instructorId) {
+			supervisorWhere.createdByInstructorId = instructorId;
+		}
+
 		const { count, rows: agencies } = await Agency.findAndCountAll({
 			where: whereClause,
 			limit,
@@ -121,7 +126,7 @@ export const getAgenciesData = async (params: GetAgenciesParams) => {
 				{
 					model: Supervisor,
 					as: "supervisors",
-					where: { isActive: true },
+					where: supervisorWhere,
 					required: false,
 					attributes: ["id", "name", "email", "position", "isActive"],
 				},
@@ -159,14 +164,20 @@ export const getAgenciesData = async (params: GetAgenciesParams) => {
 	}
 };
 
-export const findAgencyByID = async (id: string) => {
+export const findAgencyByID = async (id: string, instructorId?: string) => {
 	try {
+		// Build supervisor where clause with instructor filtering
+		const supervisorWhere: any = { isActive: true };
+		if (instructorId) {
+			supervisorWhere.createdByInstructorId = instructorId;
+		}
+
 		const agency = await Agency.findByPk(id, {
 			include: [
 				{
 					model: Supervisor,
 					as: "supervisors",
-					where: { isActive: true },
+					where: supervisorWhere,
 					required: false,
 					attributes: ["id", "name", "email", "phone", "position", "department", "isActive", "createdAt"],
 				},
@@ -449,7 +460,7 @@ export const createSupervisorData = async (data: CreateSupervisorParams) => {
 
 export const getSupervisorsData = async (params: GetSupervisorsParams) => {
 	try {
-		const { agencyId, page, limit, search, status } = params;
+		const { agencyId, page, limit, search, status, instructorId } = params;
 		const offset = (page - 1) * limit;
 
 		// Check if agency exists
@@ -461,6 +472,7 @@ export const getSupervisorsData = async (params: GetSupervisorsParams) => {
 		// Build where clause
 		const whereClause: any = {
 			agencyId,
+			...(instructorId && { createdByInstructorId: instructorId }),
 		};
 
 		if (search) {
@@ -524,12 +536,17 @@ export const findSupervisorByID = async (id: string) => {
 	}
 };
 
-export const updateSupervisorData = async (id: string, updateData: Partial<CreateSupervisorParams>) => {
+export const updateSupervisorData = async (id: string, updateData: Partial<CreateSupervisorParams>, instructorId?: string) => {
 	try {
 		const supervisor = await Supervisor.findByPk(id);
 
 		if (!supervisor) {
 			throw new Error("Supervisor not found");
+		}
+
+		// Check ownership: only the creator can edit their supervisor
+		if (instructorId && supervisor.createdByInstructorId && supervisor.createdByInstructorId !== instructorId) {
+			throw new Error("You can only edit supervisors you created");
 		}
 
 		// Check if email is being updated and if it conflicts with existing supervisor
@@ -555,12 +572,17 @@ export const updateSupervisorData = async (id: string, updateData: Partial<Creat
 	}
 };
 
-export const deleteSupervisorData = async (id: string) => {
+export const deleteSupervisorData = async (id: string, instructorId?: string) => {
 	try {
 		const supervisor = await Supervisor.findByPk(id);
 
 		if (!supervisor) {
 			throw new Error("Supervisor not found");
+		}
+
+		// Check ownership: only the creator can delete their supervisor
+		if (instructorId && supervisor.createdByInstructorId && supervisor.createdByInstructorId !== instructorId) {
+			throw new Error("You can only delete supervisors you created");
 		}
 
 		// Check if supervisor has active practicums
@@ -583,7 +605,7 @@ export const deleteSupervisorData = async (id: string) => {
 	}
 };
 
-export const getAgencySupervisorStats = async (agencyId: string) => {
+export const getAgencySupervisorStats = async (agencyId: string, instructorId?: string) => {
 	try {
 		// Check if agency exists
 		const agency = await Agency.findByPk(agencyId);
@@ -591,19 +613,25 @@ export const getAgencySupervisorStats = async (agencyId: string) => {
 			throw new Error("Agency not found");
 		}
 
+		// Build base where clause
+		const baseWhere: any = {
+			agencyId,
+			...(instructorId && { createdByInstructorId: instructorId }),
+		};
+
 		const totalSupervisors = await Supervisor.count({
-			where: { agencyId },
+			where: baseWhere,
 		});
 
 		const activeSupervisors = await Supervisor.count({
-			where: { agencyId, isActive: true },
+			where: { ...baseWhere, isActive: true },
 		});
 
 		const inactiveSupervisors = totalSupervisors - activeSupervisors;
 
 		const supervisorsWithPracticums = await Supervisor.count({
 			where: {
-				agencyId,
+				...baseWhere,
 				isActive: true,
 			},
 			include: [
