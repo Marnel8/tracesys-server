@@ -48,10 +48,7 @@ router.post(
 	clockOutController
 );
 
-// Get a single attendance record (must come after specific routes)
-router.get("/attendance/:id", isAuthenticated, getAttendanceController);
-
-// Approve attendance (instructor)
+// Approve attendance (instructor) - must come before /attendance/:id
 router.put(
 	"/attendance/:id/approve",
 	isAuthenticated,
@@ -59,13 +56,16 @@ router.put(
 	approveAttendanceController
 );
 
-// Reject attendance (instructor)
+// Reject attendance (instructor) - must come before /attendance/:id
 router.put(
 	"/attendance/:id/reject",
 	isAuthenticated,
 	authorizeRoles("instructor"),
 	rejectAttendanceController
 );
+
+// Get a single attendance record (must come after specific routes)
+router.get("/attendance/:id", isAuthenticated, getAttendanceController);
 
 export default router;
 
