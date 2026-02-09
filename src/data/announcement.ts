@@ -146,6 +146,7 @@ export const getAnnouncementsData = async (params: GetAnnouncementsParams) => {
 			sectionIds: string[];
 			courseIds: string[];
 			departmentId: string | null;
+			instructorIds: string[];
 		} | null = null;
 
 		if (userId) {
@@ -193,11 +194,16 @@ export const getAnnouncementsData = async (params: GetAnnouncementsParams) => {
 					.map((enrollment: any) => enrollment?.section?.course?.id)
 					.filter(Boolean);
 				const departmentId = (student as any).department?.id || null;
+				// Extract instructor IDs from enrolled sections
+				const instructorIds = enrollments
+					.map((enrollment: any) => enrollment?.section?.instructorId)
+					.filter(Boolean);
 
 				studentContext = {
 					sectionIds,
 					courseIds,
 					departmentId,
+					instructorIds,
 				};
 			}
 		}
@@ -241,22 +247,35 @@ export const getAnnouncementsData = async (params: GetAnnouncementsParams) => {
 		if (userId) {
 			allFilteredAnnouncements = announcements.filter((announcement) => {
 				const targets = (announcement as any).targets || [];
+				const authorId = (announcement as any).authorId || (announcement as any).author?.id;
 				
 				// If no targets, don't include (shouldn't happen, but safety check)
 				if (targets.length === 0) {
 					return false;
 				}
 
+				// If studentContext is null (no enrollments), only show "all" targeted announcements
+				if (!studentContext) {
+					return targets.some((target: any) => target.targetType === "all");
+				}
+
+				// CRITICAL: Only show announcements from the student's instructors
+				// This prevents students from seeing announcements from other instructors
+				// If student has no enrolled sections with instructors, don't show any announcements
+				if (studentContext.instructorIds.length === 0) {
+					return false;
+				}
+				
+				// Only show announcements created by the student's instructors
+				if (!studentContext.instructorIds.includes(authorId)) {
+					return false;
+				}
+
 				// Check each target
 				return targets.some((target: any) => {
-					// If target is "all", include for everyone (even if studentContext is null)
+					// If target is "all", include for everyone
 					if (target.targetType === "all") {
 						return true;
-					}
-
-					// If studentContext is null (no enrollments), only show "all" targeted announcements
-					if (!studentContext) {
-						return false;
 					}
 
 					// If target is "section", check if student is enrolled in that section
