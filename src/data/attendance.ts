@@ -1447,6 +1447,18 @@ export const clockOutData = async (params: ClockOutParams) => {
     if (record.overtimeTimeOut) {
       throw new Error("You have already clocked out for the overtime session");
     }
+    
+    // Validate overtime duration does not exceed 2 hours
+    const overtimeTimeIn = record.overtimeTimeIn;
+    const overtimeMs = now.getTime() - new Date(overtimeTimeIn).getTime();
+    const overtimeHours = overtimeMs / (1000 * 60 * 60);
+    
+    if (overtimeHours > 2.0) {
+      throw new Error(
+        "Overtime session cannot exceed 2 hours. Maximum overtime limit reached."
+      );
+    }
+    
     updateData.overtimeTimeOut = now;
     updateData.timeOut = now; // Keep for backward compatibility
   }
@@ -1484,6 +1496,8 @@ export const clockOutData = async (params: ClockOutParams) => {
     const overtimeMs =
       new Date(overtimeTimeOut).getTime() - new Date(overtimeTimeIn).getTime();
     overtimeHours = Math.max(0, overtimeMs / (1000 * 60 * 60));
+    // Cap overtime hours at 2.0 hours maximum
+    overtimeHours = Math.min(2.0, overtimeHours);
   }
 
   // Total hours = regular hours (morning + afternoon, lunch excluded) + overtime hours
